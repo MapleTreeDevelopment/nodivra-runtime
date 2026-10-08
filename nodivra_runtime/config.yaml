@@ -1,5 +1,5 @@
 name: Nodivra Runtime
-version: "0.1.0"
+version: "0.1.1"
 slug: nodivra_runtime
 description: Führt geprüfte Nodivra-Blockautomationen unabhängig vom Mac aus.
 arch:
@@ -9,6 +9,11 @@ startup: application
 boot: auto
 init: false
 homeassistant_api: true
+ingress: true
+ingress_port: 8099
+panel_admin: true
+panel_title: Nodivra Runtime
+panel_icon: mdi:graph-outline
 ports:
   8668/tcp: 8668
 ports_description:

@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 python3
 COPY server/requirements.txt /opt/nodivra/requirements.txt
 RUN python3 -m venv /opt/nodivra/venv && /opt/nodivra/venv/bin/pip install --no-cache-dir -r /opt/nodivra/requirements.txt
 COPY --from=builder /source/.build/release/NodivraEngine /usr/local/bin/NodivraEngine
-COPY server/server.py /opt/nodivra/server.py
-EXPOSE 8668
+COPY server/ /opt/nodivra/
+EXPOSE 8668 8099
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/opt/nodivra/venv/bin/python", "/opt/nodivra/server.py"]

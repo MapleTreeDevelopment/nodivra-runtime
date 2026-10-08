@@ -13,7 +13,7 @@ import uuid
 from collections import deque
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
@@ -191,9 +191,7 @@ class HomeAssistant:
 
 class Runtime:
     def __init__(self, path, key, engine_path, ha_base, ha_token):
-        if len(key) < 32:
-            raise ValueError("Bitte einen Runtime-Zugangsschlüssel mit mindestens 32 Zeichen einstellen.")
-        self.key = key
+        self.key = key if isinstance(key, str) and len(key) >= 32 else ""
         self.backup_path = Path(path) / "backups"
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
@@ -371,7 +369,7 @@ class Runtime:
         async def boundary(request, handler):
             if request.path != "/health":
                 supplied = request.headers.get("Authorization", "")
-                if not hmac.compare_digest(supplied.encode(), ("Bearer " + self.key).encode()):
+                if len(self.key) < 32 or not hmac.compare_digest(supplied.encode(), ("Bearer " + self.key).encode()):
                     return problem(401, "Runtime-Zugangsschlüssel fehlt oder ist ungültig.")
                 if request.headers.get("Origin"):
                     return problem(403, "Browser-Zugriffe auf die Runtime-API sind nicht zugelassen.")
@@ -521,7 +519,20 @@ def main():
     # Supervisor's WebSocket proxy is adjacent to /api, not inside it.
     if runtime.ha.base == "http://supervisor/core/api":
         runtime.ha.base = "http://supervisor/core"
-    web.run_app(runtime.app(), host=os.environ.get("NODIVRA_HOST", "0.0.0.0"), port=int(os.environ.get("NODIVRA_PORT", "8668")), access_log=None, print=lambda _: None)
+    app = runtime.app()
+    if os.environ.get("SUPERVISOR_TOKEN"):
+        from configuration import RuntimeConfiguration
+        configuration = RuntimeConfiguration(runtime, os.environ["SUPERVISOR_TOKEN"])
+        async def ingress(app):
+            runner = web.AppRunner(configuration.app(), access_log=None)
+            await runner.setup()
+            try:
+                await web.TCPSite(runner, "0.0.0.0", 8099).start()
+                yield
+            finally:
+                await runner.cleanup()
+        app.cleanup_ctx.append(ingress)
+    web.run_app(app, host=os.environ.get("NODIVRA_HOST", "0.0.0.0"), port=int(os.environ.get("NODIVRA_PORT", "8668")), access_log=None, print=lambda _: None)
 
 if __name__ == "__main__":
     main()

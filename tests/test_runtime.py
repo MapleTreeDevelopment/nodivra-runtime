@@ -105,6 +105,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(.02)
         self.assertTrue(self.runtime.ha.connected)
 
+    async def test_unconfigured_runtime_rejects_api_but_keeps_health(self):
+        self.runtime.key = ''
+        async with self.client.get(f'http://127.0.0.1:{self.port}/api/v1/status', headers={'Authorization':'Bearer '}) as response:
+            self.assertEqual(response.status, 401)
+        async with self.client.get(f'http://127.0.0.1:{self.port}/health') as response:
+            self.assertEqual(response.status, 200)
+
     async def asyncTearDown(self):
         await self.client.close();await self.runner.cleanup();await self.ha_runner.cleanup();self.directory.cleanup()
 

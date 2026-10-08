@@ -2,7 +2,7 @@
 
 A local execution service for Nodivra block automations on Home Assistant OS.
 
-**Early preview · 0.1.0.** The macOS editor is a separate application. This repository contains only the runtime, its shared Swift engine, and protocol tests. It does not contain user projects or credentials.
+**Early preview · 0.1.1.** The macOS editor is a separate application. This repository contains only the runtime, its shared Swift engine, and protocol tests. It does not contain user projects or credentials.
 
 ## Install
 
@@ -10,9 +10,15 @@ Use the installation assistant in Nodivra. It checks Home Assistant OS and admin
 
 Repository URL: `https://github.com/MapleTreeDevelopment/nodivra-runtime`
 
-For manual installation, add this URL under Home Assistant Settings → Apps → App store → Repositories, install Nodivra Runtime, set a random access key of at least 32 characters, then start it. The API listens on local port 8668. Keep that port on a trusted local network; do not expose it directly to the internet. Local HTTP requires explicit permission in Nodivra. The runtime requires a supported, healthy Home Assistant OS installation and amd64 or aarch64 hardware. It never updates the OS.
+For manual installation, add this URL under Home Assistant Settings → Apps → App store → Repositories, install Nodivra Runtime, then start it and choose **Open Web UI**. In the Runtime configuration, use **Generate key**, then **Save & use key**. Copy the generated key into Nodivra; no manual password invention is needed. An unconfigured runtime keeps its LAN API locked until a key is saved. The API listens on local port 8668. Keep that port on a trusted local network; do not expose it directly to the internet. Local HTTP requires explicit permission in Nodivra. The runtime requires a supported, healthy Home Assistant OS installation and amd64 or aarch64 hardware. It never updates the OS.
 
 The initial installation builds the image from source and needs internet access and sufficient free memory and disk space. Linux CI builds the same image and runs protocol tests on both supported architectures; check the latest workflow result before using a revision.
+
+## Runtime configuration and updates
+
+The Home Assistant ingress page generates 256-bit random access keys, hides them by default, and can copy and save them directly to the app options. A replacement of an existing valid key requires confirmation. Configuration writes are read back before the runtime uses the new key. The page is accessible only through the Supervisor ingress proxy, never through port 8668. No additional Supervisor manager/admin role is required.
+
+Nodivra 0.11.1 checks Home Assistant for available runtime releases and shows this package's changelog. Updates use a new full backup and a persistent progress journal, then verify the installed version and connection. Running programs remain paused after restart. [Changelog](nodivra_runtime/CHANGELOG.md).
 
 ## First automation
 
