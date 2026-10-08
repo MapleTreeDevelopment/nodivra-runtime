@@ -73,6 +73,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.calls = []
         self.current = 'off'
         self.reject_actions = False
+        self.auth_users = [{"id": "fixture-admin", "is_active": True, "group_ids": ["system-admin"]}]
         async def ws_handler(request):
             ws = web.WebSocketResponse()
             await ws.prepare(request)
@@ -86,6 +87,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                 if message.type != WSMsgType.TEXT: break
                 data=json.loads(message.data)
                 result=None
+                if data['type']=='config/auth/list': result=self.auth_users
                 if data['type']=='get_states': result=[{'entity_id':'binary_sensor.test','state':self.current}]
                 if data['type']=='get_services': result={'light':{'turn_on':{},'turn_off':{}}}
                 if data['type']=='call_service': self.calls.append(data)
@@ -104,6 +106,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             if self.runtime.ha.connected: break
             await asyncio.sleep(.02)
         self.assertTrue(self.runtime.ha.connected)
+
+    async def test_ingress_role_check_uses_current_ha_user_permissions(self):
+        self.assertTrue(await self.runtime.ha.is_admin('fixture-admin'))
+        self.assertFalse(await self.runtime.ha.is_admin('someone-else'))
+        self.auth_users[0]['group_ids'] = ['system-users']
+        self.assertFalse(await self.runtime.ha.is_admin('fixture-admin'))
+        self.assertFalse(await self.runtime.ha.is_admin(''))
 
     async def test_unconfigured_runtime_rejects_api_but_keeps_health(self):
         self.runtime.key = ''

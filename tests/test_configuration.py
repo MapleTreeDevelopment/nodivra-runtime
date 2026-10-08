@@ -14,7 +14,7 @@ KEY = 'a' * 64
 
 class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.runtime = SimpleNamespace(key='', ha=SimpleNamespace(connected=True))
+        self.runtime = SimpleNamespace(key='', ha=SimpleNamespace(connected=True, is_admin=AsyncMock(return_value=True)))
         self.config = module.RuntimeConfiguration(self.runtime, 'fixture-supervisor-token')
         self.options = {'access_key': 'short', 'other': 'preserved'}
         self.writes = 0
@@ -80,4 +80,11 @@ class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
     async def test_secret_reference_is_not_overwritten(self):
         self.options['access_key'] = '!secret nodivra_key'
         self.assertEqual((await self.client.post('/apply', json=self.payload(True), headers=self.headers)).status, 409)
+        self.assertEqual(self.writes, 0)
+
+    async def test_non_admin_cannot_read_generate_or_replace_keys(self):
+        self.runtime.ha.is_admin.return_value = False
+        for path in ['/status', '/generate', '/apply']:
+            response = await (self.client.get(path) if path == '/status' else self.client.post(path, json=self.payload(), headers=self.headers))
+            self.assertEqual(response.status, 403)
         self.assertEqual(self.writes, 0)

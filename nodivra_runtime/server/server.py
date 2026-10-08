@@ -163,6 +163,25 @@ class HomeAssistant:
             else:
                 self.states.pop(entity, None)
 
+    async def is_admin(self, user_id):
+        if not user_id or not self.connected or not self.ws:
+            return False
+        self.serial += 1
+        identity = self.serial
+        future = asyncio.get_running_loop().create_future()
+        self.waiting[identity] = future
+        try:
+            await self.ws.send_json({"id": identity, "type": "config/auth/list"})
+            response = await asyncio.wait_for(future, 5)
+            return response.get("success") is True and any(
+                user.get("id") == user_id and user.get("is_active") is True and
+                (user.get("is_owner") is True or "system-admin" in user.get("group_ids", []))
+                for user in (response.get("result") or []))
+        except Exception:
+            return False
+        finally:
+            self.waiting.pop(identity, None)
+
     def supports(self, action):
         domain, service = action.split(".", 1)
         return service in self.services.get(domain, {})

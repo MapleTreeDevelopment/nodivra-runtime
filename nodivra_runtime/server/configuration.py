@@ -33,6 +33,8 @@ class RuntimeConfiguration:
                     not hmac.compare_digest(request.headers.get("X-Nodivra-CSRF", "").encode(), self.csrf.encode())):
                 return web.Response(status=403)
             try:
+                if request.path != "/" and not await self.runtime.ha.is_admin(request.headers.get("X-Remote-User-Id", "")):
+                    return web.json_response({"error": "Bitte mit einem Home-Assistant-Administratorkonto öffnen. Falls Home Assistant gerade startet, die Seite anschließend neu laden."}, status=403, headers={"Cache-Control": "no-store"})
                 response = await handler(request)
             except (ValueError, TypeError, KeyError):
                 response = web.json_response({"error": "Ungültige Anfrage."}, status=422)
