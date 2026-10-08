@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, Mock, patch
 import uuid
 from aiohttp import web, ClientSession, WSMsgType
 
@@ -26,6 +27,44 @@ def package(service='nodivra.log', delay=False):
         blocks.insert(1, block('haAction', {'configuration': {'delay': {'seconds': 0.3}}}))
     wires = [dict(id=str(uuid.uuid4()), source=a['id'], target=b['id'], input=0) for a,b in zip(blocks,blocks[1:])]
     return dict(protocolVersion=1,timeZone='Europe/Berlin',graph=dict(formatVersion=2,id=str(uuid.uuid4()),title='Integrationstest',blocks=blocks,wires=wires))
+
+class EngineTests(unittest.IsolatedAsyncioTestCase):
+    async def test_timeout_stops_engine_and_rejects_further_requests(self):
+        engine = server.Engine('unused')
+        process = Mock(returncode=None)
+        process.stdin.drain = AsyncMock()
+        cancelled = asyncio.Event()
+        async def stalled_read():
+            try:
+                await asyncio.Future()
+            finally:
+                cancelled.set()
+        process.stdout.readline = stalled_read
+        process.wait = AsyncMock(return_value=0)
+        process.terminate.side_effect = lambda: setattr(process, 'returncode', 0)
+        engine.process = process
+        real_wait_for = asyncio.wait_for
+        async def short_timeout(awaitable, timeout):
+            return await real_wait_for(awaitable, 0.01 if timeout == 5 else timeout)
+        with patch.object(server.asyncio, 'wait_for', side_effect=short_timeout):
+            with self.assertRaisesRegex(RuntimeError, 'antwortet nicht'):
+                await engine.call(command='validate')
+        self.assertTrue(cancelled.is_set())
+        process.terminate.assert_called_once()
+        process.wait.assert_awaited_once()
+        with self.assertRaisesRegex(RuntimeError, 'nicht verfügbar'):
+            await engine.call(command='validate')
+        process.stdin.write.assert_called_once()
+
+    async def test_shutdown_kills_engine_if_termination_times_out(self):
+        engine = server.Engine('unused')
+        process = Mock(returncode=None)
+        process.wait = AsyncMock(side_effect=[asyncio.TimeoutError(), 0])
+        engine.process = process
+        await engine.close()
+        process.terminate.assert_called_once()
+        process.kill.assert_called_once()
+        self.assertEqual(process.wait.await_count, 2)
 
 class RuntimeTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

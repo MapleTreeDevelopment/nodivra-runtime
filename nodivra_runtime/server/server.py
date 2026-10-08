@@ -35,14 +35,15 @@ class Engine:
             if not self.process or self.process.returncode is not None:
                 raise RuntimeError("Die Ausführungsengine ist nicht verfügbar.")
             try:
-                async with asyncio.timeout(5):
+                async def exchange():
                     self.process.stdin.write((canonical(request) + "\n").encode())
                     await self.process.stdin.drain()
                     result = json.loads(await self.process.stdout.readline())
                     if "error" in result:
                         raise ValueError(result["error"])
                     return result
-            except (TimeoutError, json.JSONDecodeError, BrokenPipeError, ConnectionError) as error:
+                return await asyncio.wait_for(exchange(), timeout=5)
+            except (asyncio.TimeoutError, json.JSONDecodeError, BrokenPipeError, ConnectionError) as error:
                 await self.close()
                 raise RuntimeError("Die Ausführungsengine antwortet nicht. Ausführung angehalten.") from error
 
@@ -51,7 +52,7 @@ class Engine:
             self.process.terminate()
             try:
                 await asyncio.wait_for(self.process.wait(), 3)
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 self.process.kill()
                 await self.process.wait()
 
