@@ -1,0 +1,20 @@
+name: Nodivra Runtime
+version: "0.1.0"
+slug: nodivra_runtime
+description: Führt geprüfte Nodivra-Blockautomationen unabhängig vom Mac aus.
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+ports:
+  8668/tcp: 8668
+ports_description:
+  8668/tcp: Lokale Nodivra-API (Zugangsschlüssel erforderlich)
+watchdog: http://[HOST]:[PORT:8668]/health
+options:
+  access_key: ""
+schema:
+  access_key: password

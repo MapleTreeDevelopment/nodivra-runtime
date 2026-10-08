@@ -1,0 +1,28 @@
+name: Runtime Linux
+on:
+  push:
+    branches: [pegasus]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the Home Assistant runtime image
+        run: docker build -t nodivra-runtime ./nodivra_runtime
+      - name: Verify API and real Swift engine without devices
+        run: >-
+          docker run --rm --entrypoint /opt/nodivra/venv/bin/python
+          -e NODIVRA_TEST_ENGINE=/usr/local/bin/NodivraEngine
+          -v "$PWD:/tests:ro" -w /tests nodivra-runtime
+          -m unittest discover -s tests -v

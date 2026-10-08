@@ -1,0 +1,8 @@
+.DS_Store
+._*
+.build/
+__pycache__/
+*.pyc
+.env
+options.json
+*.sqlite*
