@@ -26,9 +26,10 @@ struct PLCFunctionState: Sendable {
         func falling(_ pin: Int) -> Bool { !seed && was(pin) == true && d(pin) == false }
         func n(_ key: String) -> Double { b.options[key]?.number ?? f.parameters.first { $0.key == key }?.initial.number ?? 0 }
         func t(_ key: String) -> String { b.options[key]?.string ?? f.parameters.first { $0.key == key }?.initial.string ?? "" }
-        func hysteresis(_ x: Double, _ on: Double, _ off: Double, _ previous: Bool) -> Bool {
-            if on >= off { return previous ? x > off : x >= on }
-            return previous ? x < off : x <= on
+        func hysteresis(_ x: Double, _ on: Double, _ off: Double, _ previous: Bool, counter: Bool = false) -> Bool {
+            if on < off { return x >= on && x < off }
+            if counter { return previous ? x >= off : x >= on }
+            return previous ? x > off : x > on
         }
         let resetPin: Int? = [.counter, .impulseRelay, .ramp].contains(f) ? 2 : f == .shiftRegister ? 3 : [.onOffDelay,.retentiveOnDelay,.wipingRelay,.delayedPulse,.clockPulse,.randomDelay,.staircase,.comfort,.stopwatch,.hours,.pi,.minMax,.average].contains(f) ? 1 : nil
         if let resetPin, d(resetPin) == nil { return (nil, nil, nil) }
@@ -125,7 +126,7 @@ struct PLCFunctionState: Sendable {
         case .counter:
             guard let direction = d(1), d(0) != nil else { return (nil, nil, nil) }
             if rising(0) { value = max(-999999999, min(999999999, value + (direction ? -1 : 1))) }
-            q = hysteresis(value, n("on"), n("off"), q); digitalResult = q; analogResult = value
+            q = hysteresis(value, n("on"), n("off"), q, counter: true); digitalResult = q; analogResult = value
         case .frequency:
             guard d(0) != nil else { count = 0; started = nil; return (nil, nil, nil) }
             if started == nil { started = now }
