@@ -1,6 +1,6 @@
-# Nodivra Runtime 0.6.0
+# Nodivra Runtime 0.6.1
 
-HA-OS-App-Paket für amd64 und aarch64. Runtime 0.6 ergänzt ein Dashboard direkt in Home Assistant mit Versionsinformationen, dauerhaften Zeitangaben, Aktivierung/Deaktivierung und Seitenleisten-Einbindung. Die vorhandene Mac-App 0.15.1 bleibt kompatibel. Seit Runtime 0.5 gibt es verknüpfbare Aktionsparameter und eine Wertauswahl für Zahlen, Ganzzahlen, Ein/Aus, Texte, Listen und Objekte. Diese Funktionen verwenden Protokoll 5 / Graphformat 6 und benötigen Nodivra 0.15; Protokolle 1–4 bleiben unterstützt. Engine und API besitzen automatisierte Tests mit isoliertem HA-Testserver. Die Abnahme auf einer echten HA-Installation und unter Dauerlast ist separat erforderlich. Automatische Einrichtung über https://github.com/MapleTreeDevelopment/nodivra-runtime; das lokale ZIP bleibt als manueller Weg erhalten.
+HA-OS-App-Paket für amd64 und aarch64. Runtime 0.6 ergänzt ein Dashboard direkt in Home Assistant mit Versionsinformationen, dauerhaften Zeitangaben, Aktivierung/Deaktivierung. Die vorhandene Mac-App 0.15.1 bleibt kompatibel. Seit Runtime 0.5 gibt es verknüpfbare Aktionsparameter und eine Wertauswahl für Zahlen, Ganzzahlen, Ein/Aus, Texte, Listen und Objekte. Diese Funktionen verwenden Protokoll 5 / Graphformat 6 und benötigen Nodivra 0.15; Protokolle 1–4 bleiben unterstützt. Engine und API besitzen automatisierte Tests mit isoliertem HA-Testserver. Die Abnahme auf einer echten HA-Installation und unter Dauerlast ist separat erforderlich. Automatische Einrichtung über https://github.com/MapleTreeDevelopment/nodivra-runtime; das lokale ZIP bleibt als manueller Weg erhalten.
 
 ## Installation aus Nodivra
 
@@ -22,7 +22,7 @@ Die Sicherung liegt zunächst auf dem HA-Datenträger. Unter Einstellungen → S
 ## Manueller Ersatzweg nach Freigabe des HA-OS-Updates
 
 1. Vollständige HA-Sicherung erstellen und herunterladen. Bei einer VM zusätzlich einen Snapshot des ausgeschalteten Systems anlegen, bevor das Betriebssystem verändert wird.
-2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.6.0.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
+2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.6.1.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
 3. Auf einer von Supervisor unterstützten HA-OS-Version den App-Store neu laden. Nodivra Runtime erscheint unter den lokalen Apps. Installieren. Der erste Build lädt offizielle Swift-/Python-Abhängigkeiten und benötigt Zeit und freien Speicher. Die Architektur wird vom Build gewählt.
 4. Runtime starten und **Weboberfläche öffnen** wählen. Unter **Zugang & Einstellungen** dort **Schlüssel generieren** und **Schlüssel speichern & verwenden** anklicken. 64 zufällige Zeichen werden erzeugt und in den HA-App-Optionen gespeichert; ein bisheriger gültiger Schlüssel wird erst nach Bestätigung ersetzt. Der Schlüssel lässt sich verborgen halten und kopieren. Ohne gültigen Schlüssel bleibt die externe Runtime-API gesperrt, die Einrichtung ist erreichbar.
 5. Auf dem Mac Runtime-Adresse `http://homeassistant.local:8668` und denselben Schlüssel eintragen. Lokales HTTP muss ausdrücklich erlaubt werden. Schlüssel und Programme laufen bei HTTP unverschlüsselt über das lokale Netz; Port 8668 nicht öffentlich freigeben. Die aktuelle Runtime terminiert selbst kein TLS.
@@ -38,7 +38,7 @@ Die Runtime-Konfiguration läuft getrennt vom API-Port über HA Ingress (intern 
 
 ## Dashboard direkt in Home Assistant
 
-Bei der Runtime **Weboberfläche öffnen** wählen. Mit **In Seitenleiste anzeigen** wird das Dashboard über die von Home Assistant angebotene Ingress-Einstellung eingebunden. Falls der neue Eintrag nicht sofort erscheint, Home Assistant neu laden. Die Ansicht und ihre Bedienung sind nur für Home-Assistant-Administratoren freigegeben.
+Bei der Runtime **Weboberfläche öffnen** wählen. Die Option **In Seitenleiste anzeigen** befindet sich ausschließlich in den von Home Assistant bereitgestellten App-Einstellungen unter **Einstellungen → Apps → Nodivra Runtime**, nicht im Runtime-Dashboard. Falls der neue Eintrag nicht sofort erscheint, Home Assistant neu laden. Die Ansicht und ihre Bedienung sind nur für Home-Assistant-Administratoren freigegeben.
 
 Die Übersicht zeigt die auf dieser Runtime gespeicherten Nodivra-Automationen, keine lokalen Mac-Entwürfe oder gewöhnlichen HA-YAML-Automationen. Suche, Statusfilter und Sortierung erleichtern die Auswahl. Der aktuelle Stand wird alle fünf Sekunden abgerufen, solange die Seite sichtbar ist. Veraltete Anzeigen sind nicht bedienbar.
 
@@ -49,7 +49,7 @@ Die Übersicht zeigt die auf dieser Runtime gespeicherten Nodivra-Automationen, 
 
 Die Zeitangaben werden unabhängig vom begrenzten Ereignisprotokoll gespeichert. Alte bestätigte Geräteaktionen können aus noch vorhandenen Ereignissen übernommen werden. Fehlende historische Angaben werden nicht geschätzt. Beim ersten Start von 0.6 wird die vorhandene Datenbank vor der additiven Erweiterung gesichert; die bisherigen Tabellen bleiben für eine Rückkehr zur vorherigen Runtime lesbar. Nach jedem Runtime-Neustart bleiben Programme weiterhin pausiert.
 
-Der Schlüsselbereich ist eingeklappt unter **Zugang & Einstellungen** erreichbar. Dashboard-Abfragen enthalten keine Zugangsschlüssel, App-Optionen oder vollständigen Programmpakete. Statusänderungen werden gegen Konfigurationsrevision und Bedienversion geprüft; bei Konflikten zuerst neu laden. Die Seitenleisten-Einstellung wird zurückgelesen und verändert weder Schlüssel noch andere App-Optionen.
+Der Schlüsselbereich ist eingeklappt unter **Zugang & Einstellungen** erreichbar. Dashboard-Abfragen enthalten keine Zugangsschlüssel, App-Optionen oder vollständigen Programmpakete. Statusänderungen werden gegen Konfigurationsrevision und Bedienversion geprüft; bei Konflikten zuerst neu laden. Die Runtime verändert die von Home Assistant verwaltete Seitenleisten-Einstellung nicht.
 
 ## Betrieb und Daten
 

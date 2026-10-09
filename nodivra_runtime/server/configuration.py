@@ -56,7 +56,6 @@ class RuntimeConfiguration:
         app.router.add_get("/status", self.status)
         app.router.add_get("/dashboard", self.dashboard)
         app.router.add_post("/automations/{id}/state", self.program_state)
-        app.router.add_post("/sidebar", self.sidebar)
         app.router.add_post("/generate", self.generate)
         app.router.add_post("/apply", self.apply)
         return app
@@ -74,8 +73,7 @@ class RuntimeConfiguration:
     @staticmethod
     def addon_summary(info):
         return {"installedVersion": info.get("version"), "latestVersion": info.get("version_latest"),
-                "updateAvailable": info.get("update_available") is True,
-                "sidebarEnabled": info.get("ingress_panel"), "sidebarSupported": info.get("ingress") is True}
+                "updateAvailable": info.get("update_available") is True}
 
     async def dashboard(self, request):
         unavailable = False
@@ -98,28 +96,6 @@ class RuntimeConfiguration:
         # The Mac API and ingress share the same locks, validation and lifecycle.
         response = await self.runtime.change_state(identity, data)
         return web.json_response({"updated": True}) if response.status == 200 else response
-
-    async def sidebar(self, request):
-        data = await request.json()
-        if not isinstance(data, dict) or type(data.get("enabled")) is not bool or type(data.get("expected")) is not bool:
-            raise ValueError("Invalid sidebar setting")
-        async with self.lock:
-            info = await self.call("GET", "/addons/self/info")
-            if info.get("ingress") is not True:
-                return web.json_response({"error": "Home Assistant bietet für diese Installation keine Seitenleisten-Einbindung an."}, status=409)
-            if info.get("ingress_panel") != data["expected"]:
-                return web.json_response({"error": "Die Seitenleisten-Einstellung wurde geändert. Bitte neu laden."}, status=409)
-            if info.get("ingress_panel") != data["enabled"]:
-                try:
-                    await self.call("POST", "/addons/self/options", {"ingress_panel": data["enabled"]})
-                except Exception:
-                    pass  # Read back ambiguous writes; never repeat a mutation automatically.
-            saved = await self.call("GET", "/addons/self/info")
-            if saved.get("ingress_panel") != data["enabled"]:
-                raise RuntimeError("Unconfirmed sidebar change")
-            self.info_cache = self.addon_summary(saved)
-            self.info_at = time.monotonic()
-            return web.json_response({"enabled": saved["ingress_panel"]})
 
     async def generate(self, request):
         return web.json_response({"key": secrets.token_hex(32)})

@@ -14,7 +14,7 @@ import uuid
 from collections import deque
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)

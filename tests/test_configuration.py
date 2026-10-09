@@ -14,20 +14,17 @@ KEY = 'a' * 64
 
 class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.runtime = SimpleNamespace(key='', ha=SimpleNamespace(connected=True, is_admin=AsyncMock(return_value=True)), dashboard=lambda: {'version': '0.6.0', 'automations': []}, change_state=AsyncMock(return_value=web.json_response({'package': {'private': 'not-for-browser'}})))
+        self.runtime = SimpleNamespace(key='', ha=SimpleNamespace(connected=True, is_admin=AsyncMock(return_value=True)), dashboard=lambda: {'version': '0.6.1', 'automations': []}, change_state=AsyncMock(return_value=web.json_response({'package': {'private': 'not-for-browser'}})))
         self.config = module.RuntimeConfiguration(self.runtime, 'fixture-supervisor-token')
         self.options = {'access_key': 'short', 'other': 'preserved'}
-        self.panel = False
-        self.ingress = True
         self.writes = 0
         self.lost = self.reject = False
         async def supervisor(method, path, data=None):
             if method == 'GET':
-                return {'options': self.options.copy(), 'version': '0.6.0', 'version_latest': '0.6.1', 'update_available': True, 'ingress': self.ingress, 'ingress_panel': self.panel}
+                return {'options': self.options.copy(), 'version': '0.6.1', 'version_latest': '0.6.2', 'update_available': True}
             self.writes += 1
             if not self.reject:
                 if 'options' in data: self.options = data['options'].copy()
-                if 'ingress_panel' in data: self.panel = data['ingress_panel']
             if self.lost or self.reject: raise TimeoutError()
             return {}
         self.config.call = AsyncMock(side_effect=supervisor)
@@ -88,7 +85,7 @@ class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_non_admin_cannot_read_generate_or_replace_keys(self):
         self.runtime.ha.is_admin.return_value = False
-        for path in ['/status', '/dashboard', '/generate', '/apply', '/sidebar', '/automations/00000000-0000-0000-0000-000000000001/state']:
+        for path in ['/status', '/dashboard', '/generate', '/apply', '/automations/00000000-0000-0000-0000-000000000001/state']:
             response = await (self.client.get(path) if path in ['/status', '/dashboard'] else self.client.post(path, json=self.payload(), headers=self.headers))
             self.assertEqual(response.status, 403)
         self.assertEqual(self.writes, 0)
@@ -97,34 +94,8 @@ class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
         self.options['access_key'] = KEY
         result = await (await self.client.get('/dashboard')).json()
         self.assertNotIn(KEY, str(result)); self.assertNotIn('options', result['addon'])
-        self.assertEqual(result['addon']['latestVersion'], '0.6.1')
-        self.assertFalse(result['addon']['sidebarEnabled'])
+        self.assertEqual(result['addon']['latestVersion'], '0.6.2')
         self.assertEqual(result['automations'], [])
-
-    async def test_sidebar_updates_only_panel_and_reconciles_lost_ack(self):
-        self.lost = True
-        response = await self.client.post('/sidebar', json={'enabled': True, 'expected': False}, headers=self.headers)
-        self.assertEqual(response.status, 200)
-        self.assertEqual(self.writes, 1)
-        self.assertTrue(self.panel)
-        self.assertEqual(self.options, {'access_key': 'short', 'other': 'preserved'})
-        self.config.call.assert_any_await('POST', '/addons/self/options', {'ingress_panel': True})
-        self.assertEqual((await self.client.post('/sidebar', json={'enabled': False, 'expected': False}, headers=self.headers)).status, 409)
-        self.assertEqual(self.writes, 1)
-
-    async def test_sidebar_failure_is_not_reported_as_success(self):
-        self.reject = True
-        response = await self.client.post('/sidebar', json={'enabled': True, 'expected': False}, headers=self.headers)
-        self.assertEqual(response.status, 503)
-        self.assertFalse(self.panel); self.assertEqual(self.writes, 1)
-
-    async def test_sidebar_rejects_missing_csrf_wrong_types_and_missing_ingress(self):
-        for payload in [{'enabled': 'false', 'expected': False}, {'enabled': True}, []]:
-            self.assertEqual((await self.client.post('/sidebar', json=payload, headers=self.headers)).status, 422)
-        self.assertEqual((await self.client.post('/sidebar', json={'enabled': True, 'expected': False})).status, 403)
-        self.ingress = False
-        self.assertEqual((await self.client.post('/sidebar', json={'enabled': True, 'expected': False}, headers=self.headers)).status, 409)
-        self.assertEqual(self.writes, 0)
 
     async def test_browser_activation_requires_explicit_execution_and_fresh_state(self):
         path = '/automations/00000000-0000-0000-0000-000000000001/state'
@@ -144,4 +115,4 @@ class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get('/dashboard')
         self.assertEqual(response.status, 200)
         result = await response.json()
-        self.assertIsNone(result['addon']); self.assertEqual(result['version'], '0.6.0')
+        self.assertIsNone(result['addon']); self.assertEqual(result['version'], '0.6.1')

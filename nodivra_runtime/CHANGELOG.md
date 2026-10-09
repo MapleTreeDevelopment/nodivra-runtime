@@ -1,3 +1,9 @@
+# 0.6.1
+
+- „In Seitenleiste anzeigen“ wird ausschließlich in den von Home Assistant bereitgestellten App-Einstellungen konfiguriert: Einstellungen → Apps → Nodivra Runtime.
+- Doppelten Schalter und zugehörigen Schreibendpunkt aus dem Runtime-Dashboard entfernt. Die bestehende HA-Seitenleisten-Einstellung bleibt erhalten.
+- Dashboard, Automationsverwaltung und Zugangsschlüssel bleiben verfügbar. Keine Änderung am Ausführungsprotokoll oder Datenformat.
+
 # 0.6.0
 
 - Neues Dashboard direkt in Home Assistant: Runtime-/HA-Version, Verbindung, Engine-Status und Übersicht gespeicherter Nodivra-Automationen.
