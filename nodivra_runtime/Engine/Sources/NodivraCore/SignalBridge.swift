@@ -55,7 +55,7 @@ public enum SignalBridge {
             guard !seen.contains(id), let b = graph.blocks.first(where: { $0.id == id }) else { return false }
             if b.kind == .haTrigger { return b.text("signalBehavior", "event") == "event" }
             if b.kind == .haAction || (b.kind == .button && b.momentary) { return true }
-            if b.kind.isMemory { return false }
+            if b.kind.isMemory || b.kind.isMarker || b.kind.isContact { return false }
             return graph.wires.filter { $0.target == id }.contains { event($0.source, seen: seen.union([id])) }
         }
         if graph.wires.filter({ $0.target == block.id }).contains(where: { event($0.source) }) { return "rising" }

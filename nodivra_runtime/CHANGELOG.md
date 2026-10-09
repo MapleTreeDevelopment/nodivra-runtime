@@ -1,3 +1,12 @@
+# 0.2.0
+
+- SPS-Programme mit digitalen und analogen Ein-/Ausgängen.
+- M/AM-Merker und Kontakte mit definiertem Zyklusverhalten.
+- Virtuelle Eingänge pro Programm über die App bedienbar.
+- Analoge Entitätsattribute, Zahlenvergleich und Zahlenwerte in der Live-Ansicht.
+- Bestehende Programme im Protokoll 1 bleiben unterstützt. Neue SPS-Programme verwenden Protokoll 2.
+- Nach einem Neustart bleiben Programme pausiert. Merker sind noch nicht remanent.
+
 # Änderungen
 
 ## 0.1.1

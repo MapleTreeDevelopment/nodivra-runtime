@@ -5,7 +5,7 @@ public struct RuntimePackage: Codable, Equatable, Sendable {
     public var protocolVersion: Int = 1
     public var graph: AutomationGraph
     public var timeZone: String
-    public init(graph: AutomationGraph, timeZone: String = TimeZone.current.identifier) { self.graph = graph; self.timeZone = timeZone }
+    public init(graph: AutomationGraph, timeZone: String = TimeZone.current.identifier) { self.graph = graph; self.timeZone = timeZone; protocolVersion = graph.usesPLCCycle ? 2 : 1 }
 }
 public struct RuntimeIssue: Codable, Identifiable, Equatable, Sendable {
     public var blockID: UUID?
@@ -20,13 +20,13 @@ public struct RuntimeValidation: Codable, Sendable {
     public var valid: Bool { issues.isEmpty }
 }
 public enum RuntimeCompiler {
-    public static let version = "0.1.1"
-    public static let catalogIDs: Set<String> = ["logic.state", "logic.stateMatch", "logic.numeric", "logic.constant", "logic.timeWindow", "logic.button", "logic.and", "logic.or", "logic.xor", "logic.not", "logic.onDelay", "logic.offDelay", "logic.pulse", "logic.latch", "logic.output", "logic.darkness", "logic.motion", "logic.autoOff", "trigger.state", "trigger.time", "trigger.pattern", "condition.state", "condition.numeric", "condition.time", "action.service", "action.delay", "runtime.log"]
+    public static let version = "0.2.0"
+    public static let catalogIDs: Set<String> = ["logic.digitalInput", "logic.analogInput", "logic.digitalOutput", "logic.analogOutput", "logic.marker", "logic.analogMarker", "logic.markerContact", "logic.analogContact", "logic.analogCompare", "logic.state", "logic.stateMatch", "logic.numeric", "logic.constant", "logic.timeWindow", "logic.button", "logic.and", "logic.or", "logic.xor", "logic.not", "logic.onDelay", "logic.offDelay", "logic.pulse", "logic.latch", "logic.output", "logic.darkness", "logic.motion", "logic.autoOff", "trigger.state", "trigger.time", "trigger.pattern", "condition.state", "condition.numeric", "condition.time", "action.service", "action.delay", "runtime.log"]
     public static func validate(_ package: RuntimePackage) -> RuntimeValidation {
         let g = package.graph
         var issues: [RuntimeIssue] = []
         func fail(_ text: String, _ b: Block? = nil) { issues.append(.init(text, blockID: b?.id)) }
-        if package.protocolVersion != 1 || g.formatVersion != 2 { fail("Diese Programmversion wird von der Runtime nicht unterstützt.") }
+        if ![1, 2].contains(package.protocolVersion) || ![2, 3].contains(g.formatVersion) || (g.usesPLCCycle && package.protocolVersion < 2) { fail("Diese Programmversion wird von der Runtime nicht unterstützt.") }
         if TimeZone(identifier: package.timeZone) == nil { fail("Eine gültige Zeitzone ist erforderlich.") }
         if g.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { fail("Gib der Automation einen Namen.") }
         if g.blocks.isEmpty || g.blocks.count > 150 || g.wires.count > 400 { fail("Ein Programm benötigt 1 bis 150 Bausteine und höchstens 400 Verbindungen.") }
@@ -36,14 +36,20 @@ public enum RuntimeCompiler {
         }
         let blocks = Dictionary(uniqueKeysWithValues: g.blocks.map { ($0.id, $0) })
         for w in g.wires {
-            guard let a = blocks[w.source], let b = blocks[w.target], a.kind.hasOutput, w.source != w.target, (0..<b.kind.inputCount).contains(w.input) else { fail("Eine Verbindung hat keinen gültigen Anschluss."); continue }
+            guard let a = blocks[w.source], let b = blocks[w.target], a.kind.hasOutput, (w.source != w.target || b.kind.isMarker), (0..<b.kind.inputCount).contains(w.input) else { fail("Eine Verbindung hat keinen gültigen Anschluss."); continue }
+            if a.kind.outputType != b.kind.inputType { fail("Ein/Aus und Zahlenwerte benötigen passende Anschlüsse. Verwende für Zahlen einen Analogvergleich.", b) }
         }
-        if ordered(g).count != g.blocks.count { fail("Rückkopplungen sind noch nicht unterstützt. Verwende einen Speicherbaustein ohne Rückleitung.") }
+        if ordered(g).count != g.blocks.count { fail("Eine Rückführung benötigt einen Merker. Eine Schleife ohne Zyklusspeicher ist nicht ausführbar.") }
         var inputs = Set<String>(), actions = 0
         for b in g.blocks {
             if b.flag("configurationError") { fail("Korrigiere die erweiterte Konfiguration.", b) }
             let allowedOptions: Set<String>
             switch b.kind {
+            case .digitalInput: allowedOptions = ["initial"]
+            case .analogInput: allowedOptions = ["initial", "attribute", "minimum", "maximum"]
+            case .analogOutput: allowedOptions = ["deadband"]
+            case .markerContact, .analogContact: allowedOptions = ["markerID"]
+            case .analogCompare: allowedOptions = ["threshold", "comparison"]
             case .state: allowedOptions = ["behavior"]
             case .stateMatch: allowedOptions = ["expected"]
             case .numeric: allowedOptions = ["threshold", "comparison"]
@@ -76,7 +82,7 @@ public enum RuntimeCompiler {
             if b.negatedInputs.contains(where: { !(0..<b.kind.inputCount).contains($0) }) { fail("Ungültiger negierter Eingang.", b) }
             for pin in 0..<b.kind.inputCount {
                 let n = g.wires.filter { $0.target == b.id && $0.input == pin }.count
-                if n == 0 && b.kind != .haCondition { fail("Verbinde Eingang \(pin + 1).", b) }
+                if n == 0 && b.kind != .haCondition && !(g.usesPLCCycle && b.kind == .latch) { fail("Verbinde Eingang \(pin + 1).", b) }
                 if n > 1 { fail("Verwende ODER, um mehrere Signale an einem Eingang zusammenzuführen.", b) }
             }
             if [.state, .stateMatch, .numeric, .button, .output].contains(b.kind) {
@@ -85,12 +91,34 @@ public enum RuntimeCompiler {
                 else { fail("Wähle eine gültige Entität.", b) }
             }
             if b.kind.isTimed && (!b.duration.isFinite || !(0.1...86400).contains(b.duration)) { fail("Die Dauer muss zwischen 0,1 Sekunden und 24 Stunden liegen.", b) }
-            if b.kind == .numeric && (!b.number("threshold", 20).isFinite || ![">", ">=", "<", "<=", "==", "!="].contains(b.text("comparison", ">"))) { fail("Wähle einen gültigen Zahlenvergleich.", b) }
+            if [.numeric, .analogCompare].contains(b.kind) && (!b.number("threshold", 20).isFinite || ![">", ">=", "<", "<=", "==", "!="].contains(b.text("comparison", ">"))) { fail("Wähle einen gültigen Zahlenvergleich.", b) }
             if b.kind == .timeWindow && !TimeWindow(block: b).valid { fail("Wähle ein gültiges Zeitfenster und Wochentage.", b) }
             if b.kind == .output {
                 actions += 1
                 if !["light", "switch", "fan", "input_boolean"].contains(b.entityID.components(separatedBy: ".").first ?? "") { fail("Der Schaltausgang unterstützt Licht, Schalter, Lüfter und Ein/Aus-Helfer.", b) }
             }
+            if b.kind.outputType == .analog && b.negated || b.kind.inputType == .analog && !b.negatedInputs.isEmpty { fail("Zahlenanschlüsse können nicht logisch negiert werden.", b) }
+            if b.kind.isContact {
+                guard let id = b.markerID, let marker = blocks[id], marker.kind.isMarker, marker.kind.outputType == b.kind.outputType else { fail("Wähle einen passenden Merker dieses Programms.", b); continue }
+            }
+            if b.kind.isPLCInput {
+                if !b.virtualPLC && !validEntity(b.entityID) { fail("Wähle eine gültige Eingangs-Entität.", b) }
+                if b.kind == .digitalInput, let initial = b.options["initial"], initial.bool == nil { fail("Der Startwert benötigt Ein oder Aus.", b) }
+                if b.kind == .analogInput {
+                    for key in ["initial", "minimum", "maximum"] where b.options[key] != nil {
+                        if b.options[key]?.number?.isFinite != true { fail("\(key) benötigt einen endlichen Zahlenwert.", b) }
+                    }
+                    if b.number("minimum", 0) > b.number("maximum", 100) || b.number("initial", 0) < b.number("minimum", 0) || b.number("initial", 0) > b.number("maximum", 100) { fail("Der Startwert muss im eingestellten Wertebereich liegen.", b) }
+                    if let attribute = b.options["attribute"], attribute.string == nil || b.text("attribute").contains("#") { fail("Wähle einen gültigen Attributnamen.", b) }
+                }
+                inputs.insert(b.inputKey)
+            }
+            if b.kind.isPLCOutput && !b.virtualPLC {
+                actions += 1
+                let domains = b.kind == .digitalOutput ? ["light", "switch", "fan", "input_boolean"] : ["number", "input_number", "light"]
+                if !validEntity(b.entityID) || !domains.contains(b.entityID.components(separatedBy: ".").first ?? "") { fail("Wähle eine schreibbare Ausgangs-Entität: " + domains.joined(separator: ", "), b) }
+            }
+            if b.kind == .analogOutput, let deadband = b.options["deadband"], deadband.number?.isFinite != true || b.number("deadband", 0.1) < 0 { fail("Die Mindeständerung muss eine endliche Zahl ab null sein.", b) }
             if b.kind == .haCondition {
                 if let e = condition(b.configuration) { inputs.formUnion(e.dependencies) }
                 else { fail("Diese Bedingung oder eine ihrer Optionen wird von Runtime 0.1 noch nicht ausgewertet. Unterstützt sind Zustand, Zahlenbereich, Zeitfenster und Hell/Dunkel ohne Versatz.", b) }
@@ -139,7 +167,8 @@ public enum RuntimeCompiler {
         var ownership: [String: UUID] = [:]
         for b in g.blocks {
             let key: String?
-            if b.kind == .output && b.text("behavior", "follow") == "follow" { key = "entity:" + b.entityID }
+            if b.kind.isPLCOutput && !b.virtualPLC { key = "entity:" + b.entityID }
+            else if b.kind == .output && b.text("behavior", "follow") == "follow" { key = "entity:" + b.entityID }
             else if b.kind == .haAction && SignalBridge.resolvedActionBehavior(b, in: g) == "follow" { key = "target:" + SignalBridge.targetKey(b.configuration) }
             else { key = nil }
             if let key { if ownership[key] != nil { fail("Mehrere Folgeausgänge steuern dasselbe Ziel. Fasse die Signale zunächst mit ODER zusammen; Zielprioritäten folgen in einer späteren Version.", b) }; ownership[key] = b.id }
@@ -148,12 +177,12 @@ public enum RuntimeCompiler {
     }
     static func ordered(_ g: AutomationGraph) -> [Block] {
         var left = g.blocks, done = Set<UUID>(), result: [Block] = []
-        while let i = left.firstIndex(where: { b in g.wires.filter { $0.target == b.id }.allSatisfy { done.contains($0.source) } }) {
+        while let i = left.firstIndex(where: { b in b.kind.isMarker || b.kind.isContact || g.wires.filter { $0.target == b.id }.allSatisfy { done.contains($0.source) } }) {
             let b = left.remove(at: i); done.insert(b.id); result.append(b)
         }
         return result
     }
-    public static func virtualInput(_ b: Block) -> String { "nodivra_button." + b.id.uuidString.lowercased().replacingOccurrences(of: "-", with: "") }
+    public static func virtualInput(_ b: Block) -> String { (b.kind.isPLCInput ? "nodivra_input." : "nodivra_button.") + b.id.uuidString.lowercased().replacingOccurrences(of: "-", with: "") }
     static func validEntity(_ s: String) -> Bool { s.range(of: "^[a-z_]+\\.[a-z0-9_]+$", options: .regularExpression) != nil }
     static func condition(_ c: ConfigValue) -> BooleanExpression? {
         var d = c.object ?? [:]; d.removeValue(forKey: "alias"); d.removeValue(forKey: "enabled")

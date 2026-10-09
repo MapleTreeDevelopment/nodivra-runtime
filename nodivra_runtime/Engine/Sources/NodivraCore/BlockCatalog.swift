@@ -19,7 +19,7 @@ public enum BlockCatalog {
     }
     public static let descriptors: [BlockDescriptor] = {
         var result = BlockKind.allCases.filter { !$0.isFlow }.map { kind in
-            let category = kind.isEntityInput || kind == .constant || kind == .timeWindow ? "Eingänge" : kind.isMemory ? "Zeit & Speicher" : kind == .output ? "Ausgänge" : "Logik"
+            let category = kind.isPLCInput || kind.isContact || kind.isEntityInput || kind == .constant || kind == .timeWindow ? "Eingänge" : kind.isMarker || kind.isMemory ? "Zeit & Speicher" : kind.isPLCOutput || kind == .output ? "Ausgänge" : "Logik"
             return BlockDescriptor(id: "logic.\(kind.rawValue)", title: kind.label, category: category, kind: kind, summary: "", defaults: .object([:]), requiredPaths: [])
         }
         result += [

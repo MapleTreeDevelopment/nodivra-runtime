@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import sqlite3
@@ -13,7 +14,7 @@ import uuid
 from collections import deque
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
-VERSION = "0.1.1"
+VERSION = "0.2.0"
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
@@ -112,7 +113,9 @@ class HomeAssistant:
                                 if identity == 1:
                                     subscribed = True
                                 elif identity == 2:
-                                    self.states = {s["entity_id"]: s["state"] for s in data["result"]}
+                                    self.states = {}
+                                    for state in data["result"]:
+                                        self.states.update(self.flatten_state(state))
                                     for event in buffered:
                                         self.apply_state(event)
                                     buffered.clear()
@@ -150,18 +153,35 @@ class HomeAssistant:
                     await self.on_disconnect()
             await asyncio.sleep(5)
 
+    @staticmethod
+    def flatten_state(state):
+        if not state:
+            return {}
+        entity, value = state["entity_id"], state["state"]
+        result = {entity: value}
+        if value not in ("unknown", "unavailable"):
+            for name, attribute in state.get("attributes", {}).items():
+                if isinstance(attribute, (str, int, float)) and not isinstance(attribute, bool):
+                    result[entity + "#" + name] = str(attribute)
+        return result
+
     def apply_state(self, event):
         entity = event.get("entity_id")
-        if entity:
-            state = event.get("new_state")
-            value = state.get("state") if state else None
-            if self.states.get(entity) != value:
+        if not entity:
+            return
+        state = event.get("new_state")
+        current = self.flatten_state(dict(state, entity_id=entity)) if state else {}
+        keys = {key for key in self.states if key == entity or key.startswith(entity + "#")} | set(current)
+        # Atomic update: a PLC scan receives the complete process image.
+        for key in sorted(keys):
+            value = current.get(key)
+            if self.states.get(key) != value:
                 self.sequence += 1
-                self.history.append((self.sequence, entity, value))
-            if state:
-                self.states[entity] = state["state"]
+                self.history.append((self.sequence, key, value))
+            if value is None:
+                self.states.pop(key, None)
             else:
-                self.states.pop(entity, None)
+                self.states[key] = value
 
     async def is_admin(self, user_id):
         if not user_id or not self.connected or not self.ws:
@@ -237,6 +257,7 @@ class Runtime:
         self.closing = False
         self.cursors = {}
         self.input_states = {}
+        self.virtual_values = {}
         self.inputs = {}
         self.running = {}
         self.snapshots = {}
@@ -289,6 +310,7 @@ class Runtime:
 
     async def pause(self, identity, message):
         self.running.pop(identity, None)
+        self.virtual_values.pop(identity, None)
         self.snapshots.pop(identity, None)
         self.db.execute("UPDATE programs SET enabled=0,error=? WHERE id=?", (message, identity))
         self.db.commit()
@@ -300,6 +322,8 @@ class Runtime:
         if self.closing:
             return
         for identity in list(self.running):
+            if self.record(identity)["package"].get("protocolVersion", 1) >= 2 and not any(not key.startswith("nodivra_input.") for key in self.inputs.get(identity, [])) and not (await self.validate(self.record(identity)["package"]))["deviceActions"]:
+                continue
             # Do not wait on an action while the WebSocket receive loop is closing.
             asyncio.create_task(self.pause_locked(identity, "Home Assistant getrennt. Nach dem Abgleich erneut aktivieren."))
 
@@ -340,6 +364,8 @@ class Runtime:
                     frames.append(dict(self.input_states[identity]))
                 if not frames:
                     frames.append(self.input_states[identity])
+                if record["package"].get("protocolVersion", 1) >= 2:
+                    frames = [dict(self.ha.states) | self.virtual_values.get(identity, {})]
                 for states in frames:
                     result = await self.engine.call(op="step", id=identity, now=time.monotonic()-start, date=time.time(), states=states)
                     self.snapshots[identity] = result | {"observedAt": time.time()}
@@ -409,6 +435,8 @@ class Runtime:
         app.router.add_get("/api/v1/automations/{id}", self.get_program)
         app.router.add_post("/api/v1/automations/{id}/state", self.set_state)
         app.router.add_get("/api/v1/automations/{id}/revisions", self.revisions)
+        app.router.add_get("/api/v1/automations/{id}/inputs", self.get_inputs)
+        app.router.add_post("/api/v1/automations/{id}/inputs/{block}", self.set_input)
         app.router.add_get("/api/v1/events", self.events)
         app.router.add_get("/api/v1/live/{id}", self.live)
         app.on_startup.append(self.start)
@@ -420,7 +448,7 @@ class Runtime:
         return web.json_response({"service": "nodivra-runtime", "version": VERSION}, status=200 if ready else 503)
 
     async def status(self, request):
-        return web.json_response({"version": VERSION, "protocolVersion": 1, "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "pause", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
+        return web.json_response({"version": VERSION, "protocolVersion": 2, "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "pause", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
 
     async def list_programs(self, request):
         return web.json_response({"automations": self.records()})
@@ -492,7 +520,7 @@ class Runtime:
                 check = await self.validate(record["package"])
                 if not check["valid"]:
                     return web.json_response(check, status=422)
-                if (check["deviceActions"] or any(not e.startswith("nodivra_button.") for e in check["inputs"])) and not self.ha.connected:
+                if (check["deviceActions"] or any(not e.startswith(("nodivra_button.", "nodivra_input.")) for e in check["inputs"])) and not self.ha.connected:
                     return problem(409, "Zuerst Home Assistant verbinden. Die Automation bleibt deaktiviert.")
                 if any(e.startswith("nodivra_button.") for e in check["inputs"]):
                     return problem(422, "Virtuelle Taster sind vorerst nur in der lokalen Simulation bedienbar. Für die Runtime eine reale Eingabe wählen.")
@@ -502,7 +530,13 @@ class Runtime:
                         action = config.get("action", config.get("service"))
                         if action and action != "nodivra.log" and not self.ha.supports(action):
                             return problem(422, "Eine verwendete Aktion ist in Home Assistant nicht verfügbar.")
-                snapshot = await self.engine.call(op="load", id=identity, package=record["package"], states=self.ha.states, date=time.time())
+                virtual = {}
+                for b in record["package"]["graph"]["blocks"]:
+                    if b["kind"] in ("digitalInput", "analogInput") and not b.get("entityID"):
+                        value = b.get("options", {}).get("initial", False if b["kind"] == "digitalInput" else 0)
+                        virtual[self.input_key(b)] = ("on" if value else "off") if b["kind"] == "digitalInput" else str(value)
+                self.virtual_values[identity] = virtual
+                snapshot = await self.engine.call(op="load", id=identity, package=record["package"], states=dict(self.ha.states) | virtual, date=time.time())
                 self.snapshots[identity] = snapshot | {"observedAt": time.time()}
                 self.cursors[identity] = self.ha.sequence
                 self.input_states[identity] = dict(self.ha.states)
@@ -512,6 +546,52 @@ class Runtime:
                 self.db.commit()
                 self.event(identity, "started", "Beobachten gestartet. Geräteaktionen werden nur protokolliert." if mode == "observe" else "Ausführung gestartet. Geräteaktionen sind freigegeben.")
             return web.json_response(self.record(identity))
+
+    @staticmethod
+    def input_key(block):
+        return "nodivra_input." + str(uuid.UUID(block["id"])).replace("-", "")
+
+    def input_response(self, identity):
+        values = {}
+        for block in self.record(identity)["package"]["graph"]["blocks"]:
+            raw = self.virtual_values.get(identity, {}).get(self.input_key(block))
+            if raw is not None:
+                values[str(uuid.UUID(block["id"]))] = raw == "on" if block["kind"] == "digitalInput" else float(raw)
+        return web.json_response({"values": values})
+
+    async def get_inputs(self, request):
+        identity = request.match_info["id"]
+        async with self.lock(identity):
+            if identity not in self.running:
+                return problem(409, "Das Programm läuft nicht. Eingänge werden beim Aktivieren initialisiert.")
+            return self.input_response(identity)
+
+    async def set_input(self, request):
+        identity = request.match_info["id"]
+        block_id = str(uuid.UUID(request.match_info["block"]))
+        data = await request.json()
+        async with self.lock(identity):
+            record = self.record(identity)
+            if not record or identity not in self.running:
+                return problem(409, "Das Programm läuft nicht.")
+            if data.get("expectedRevision") != record["revision"]:
+                return problem(409, "Die Serverfassung wurde geändert. Zuerst neu laden.")
+            block = next((b for b in record["package"]["graph"]["blocks"] if str(uuid.UUID(b["id"])) == block_id), None)
+            if not block or block["kind"] not in ("digitalInput", "analogInput") or block.get("entityID"):
+                return problem(422, "Nur virtuelle Eingänge dieses Programms sind bedienbar.")
+            value = data.get("value")
+            if block["kind"] == "digitalInput":
+                if type(value) is not bool:
+                    return problem(422, "Der Eingang benötigt Ein oder Aus.")
+                raw = "on" if value else "off"
+            else:
+                options = block.get("options", {})
+                if type(value) not in (float, int) or not math.isfinite(value) or not options.get("minimum", 0) <= value <= options.get("maximum", 100):
+                    return problem(422, "Der Zahlenwert liegt außerhalb des erlaubten Bereichs.")
+                raw = str(value)
+            self.virtual_values[identity][self.input_key(block)] = raw
+            self.event(identity, "input", "Virtuellen Eingang geändert: " + block["title"], block["id"])
+            return self.input_response(identity)
 
     async def revisions(self, request):
         rows = self.db.execute("SELECT revision,package,created FROM revisions WHERE id=? ORDER BY created DESC", (request.match_info["id"],)).fetchall()

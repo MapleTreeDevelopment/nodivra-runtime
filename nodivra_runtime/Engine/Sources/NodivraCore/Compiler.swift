@@ -106,6 +106,8 @@ public enum GraphCompiler {
             }
             var value: BooleanExpression
             switch b.kind {
+            case .digitalInput, .analogInput, .digitalOutput, .analogOutput, .marker, .analogMarker, .markerContact, .analogContact, .analogCompare:
+                throw CompilationError(diagnostics: [.init("SPS-Bausteine benötigen Nodivra Runtime 0.2 oder neuer.", blockID: b.id)])
             case .state: value = .entity(b.entityID); inputs[b.entityID] = b
             case .stateMatch: value = .matches(b.entityID, b.text("expected", "on")); inputs[b.entityID] = b
             case .numeric: value = .numeric(b.entityID, b.text("comparison", ">"), b.number("threshold", 20)); inputs[b.entityID] = b

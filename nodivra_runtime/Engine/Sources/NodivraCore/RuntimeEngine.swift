@@ -9,6 +9,8 @@ public struct RuntimeCommand: Codable, Identifiable, Sendable {
 public struct RuntimeSnapshot: Codable, Sendable {
     public var time: Double
     public var signals: [String: Bool]
+    public var analogSignals: [String: Double]
+    public var cycle: UInt64
     public var remaining: [String: Double]
     public var pending: [String]
     public var commands: [RuntimeCommand]
@@ -24,6 +26,10 @@ public struct RuntimeEngine: Sendable {
     public private(set) var date: Date
     public private(set) var states: [String: String]
     public private(set) var signals: [UUID: Bool] = [:]
+    public private(set) var analogSignals: [UUID: Double] = [:]
+    public private(set) var cycle: UInt64 = 0
+    private var markerValues: [UUID: ConfigValue] = [:]
+    private var previousAnalog: [UUID: Double] = [:]
     public private(set) var fault: String?
     private var ordered: [Block]
     private var calendar: Calendar
@@ -42,6 +48,7 @@ public struct RuntimeEngine: Sendable {
         self.package = package; validation = v; self.states = states; lastStates = states; self.date = date
         ordered = RuntimeCompiler.ordered(package.graph)
         calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: package.timeZone)!
+        for b in package.graph.blocks where b.kind.isMarker { markerValues[b.id] = b.kind == .marker ? .bool(false) : .number(0) }
         _ = evaluate(seed: true)
     }
     public func remaining(_ id: UUID) -> Double? { deadlines[id].map { max(0, $0 - time) } }
@@ -51,6 +58,7 @@ public struct RuntimeEngine: Sendable {
             fault = "Ausführung pausiert: Zeitbasis unterbrochen. Erneut aktivieren, um mit aktuellen Zuständen zu starten."; return snapshot([])
         }
         time = now; lastNow = now; self.date = date; self.states = states
+        cycle += 1
         let commands = evaluate(seed: false); lastStates = states
         return snapshot(commands)
     }
@@ -61,21 +69,74 @@ public struct RuntimeEngine: Sendable {
         else { fault = "Aktion nicht bestätigt. Die Automation wurde pausiert; es erfolgt keine automatische Wiederholung." }
     }
     public func snapshot(_ commands: [RuntimeCommand] = []) -> RuntimeSnapshot {
-        .init(time: time, signals: Dictionary(uniqueKeysWithValues: signals.map { ($0.key.uuidString, $0.value) }), remaining: Dictionary(uniqueKeysWithValues: deadlines.map { ($0.key.uuidString, max(0, $0.value - time)) }), pending: pending.keys.map(\.uuidString), commands: commands, fault: fault)
+        .init(time: time, signals: Dictionary(uniqueKeysWithValues: signals.map { ($0.key.uuidString, $0.value) }), analogSignals: Dictionary(uniqueKeysWithValues: analogSignals.map { ($0.key.uuidString, $0.value) }), cycle: cycle, remaining: Dictionary(uniqueKeysWithValues: deadlines.map { ($0.key.uuidString, max(0, $0.value - time)) }), pending: pending.keys.map(\.uuidString), commands: commands, fault: fault)
     }
     private mutating func evaluate(seed: Bool) -> [RuntimeCommand] {
         var commands: [RuntimeCommand] = []
         let g = package.graph
+        // Publish the process image before evaluating any combinational block. Contacts
+        // and direct marker outputs always expose exactly the same previous-cycle value.
+        for b in ordered where b.kind.isMarker || b.kind.isContact {
+            let stored = markerValues[b.kind.isMarker ? b.id : (b.markerID ?? b.id)]
+            if b.kind.outputType == .analog { analogSignals[b.id] = stored?.number }
+            else { signals[b.id] = stored?.bool.map { b.negated ? !$0 : $0 } }
+        }
         for b in ordered {
+            if b.kind.isMarker || b.kind.isContact { continue }
+
             func input(_ pin: Int) -> Bool? {
-                guard let w = g.wires.first(where: { $0.target == b.id && $0.input == pin }), let value = signals[w.source] else { return nil }
+                guard let w = g.wires.first(where: { $0.target == b.id && $0.input == pin }) else {
+                    // LOGO-style unconnected S/R pins are zero in new PLC programs.
+                    return g.usesPLCCycle && b.kind == .latch ? b.negatedInputs.contains(pin) : nil
+                }
+                guard let value = signals[w.source] else { return nil }
                 return b.negatedInputs.contains(pin) ? !value : value
             }
+            func analogInput() -> Double? { g.wires.first { $0.target == b.id && $0.input == 0 }.flatMap { analogSignals[$0.source] } }
             func evaluate(_ expression: BooleanExpression) -> Bool? { expression.available(states) ? expression.evaluate(states, at: date, calendar: calendar) : nil }
             let prior = previous[b.id], incoming = input(0)
             var value: Bool?
             let c = b.configuration.object ?? [:]
             switch b.kind {
+            case .digitalInput:
+                let raw = states[b.inputKey] ?? (b.virtualPLC ? b.initialInput : "unavailable")
+                value = ["on", "true", "1"].contains(raw) ? true : ["off", "false", "0"].contains(raw) ? false : nil
+            case .analogInput:
+                let raw = states[b.inputKey] ?? (b.virtualPLC ? b.initialInput : "unavailable")
+                analogSignals[b.id] = Double(raw).flatMap { $0.isFinite ? $0 : nil }
+            case .analogCompare:
+                if let n = analogInput() {
+                    let t = b.number("threshold", 20)
+                    switch b.text("comparison", ">") {
+                    case ">": value = n > t; case ">=": value = n >= t; case "<": value = n < t
+                    case "<=": value = n <= t; case "==": value = n == t; default: value = n != t
+                    }
+                }
+            case .digitalOutput, .analogOutput:
+                value = incoming.map { b.negated ? !$0 : $0 }
+                let n = analogInput()
+                if b.kind == .analogOutput { analogSignals[b.id] = n; value = nil }
+                let changed = b.kind == .digitalOutput ? (value != nil && prior != nil && value != prior) : (n != nil && previousAnalog[b.id] != nil && n != previousAnalog[b.id] && abs(n! - previousAnalog[b.id]!) >= b.number("deadband", 0.1))
+                if !seed && changed && !b.virtualPLC {
+                    let domain = b.entityID.components(separatedBy: ".")[0]
+                    var data: [String: ConfigValue] = [:]
+                    let action: String
+                    if b.kind == .digitalOutput { action = domain + (value == true ? ".turn_on" : ".turn_off") }
+                    else if domain == "light" {
+                        guard let n, (0...100).contains(n) else { fault = "\(b.title): Helligkeit muss zwischen 0 und 100 % liegen."; return [] }
+                        action = n == 0 ? "light.turn_off" : "light.turn_on"
+                        if n > 0 { data["brightness_pct"] = .number(n) }
+                    } else { action = domain + ".set_value"; data["value"] = .number(n!) }
+                    actionTimes.removeAll { time - $0 >= 60 }
+                    if pending[b.id] != nil { fault = "\(b.title): Vorherige Ausgangsaktion noch nicht bestätigt."; return [] }
+                    if actionTimes.count >= 30 { fault = "Schutzgrenze erreicht: höchstens 30 Aktionen pro Minute je Automation."; return [] }
+                    let command = RuntimeCommand(blockID: b.id, configuration: .object(["action": .string(action), "target": .object(["entity_id": .string(b.entityID)]), "data": .object(data)]), time: time)
+                    commands.append(command); pending[b.id] = command; actionTimes.append(time)
+                }
+                previous[b.id] = value
+                // Accumulate small analog changes against the last sent value.
+                if seed || changed || n == nil || previousAnalog[b.id] == nil { previousAnalog[b.id] = n }
+            case .marker, .analogMarker, .markerContact, .analogContact: break
             case .state: value = evaluate(.entity(b.entityID))
             case .stateMatch: value = evaluate(.matches(b.entityID, b.text("expected", "on")))
             case .numeric: value = evaluate(.numeric(b.entityID, b.text("comparison", ">"), b.number("threshold", 20)))
@@ -181,9 +242,19 @@ public struct RuntimeEngine: Sendable {
                 if let end = deadlines[b.id], end <= time { deadlines.removeValue(forKey: b.id); completions[b.id] = time + 0.2 }
                 value = completions[b.id].map { $0 > time } ?? false
             }
-            if b.negated && b.kind != .haAction && b.kind != .output { value = value.map { !$0 } }
+            if b.negated && b.kind != .haAction && b.kind != .output && b.kind != .digitalOutput { value = value.map { !$0 } }
             signals[b.id] = value
             if fault != nil { return [] }
+        }
+        if !seed {
+            // Commit simultaneously; never expose a partially updated marker bank.
+            var next = markerValues
+            for b in ordered where b.kind.isMarker {
+                let source = g.wires.first { $0.target == b.id && $0.input == 0 }?.source
+                if b.kind == .analogMarker { next[b.id] = source.flatMap { analogSignals[$0] }.map(ConfigValue.number) ?? .null }
+                else { next[b.id] = source.flatMap { signals[$0] }.map { .bool(b.negatedInputs.contains(0) ? !$0 : $0) } ?? .null }
+            }
+            markerValues = next
         }
         return commands
     }

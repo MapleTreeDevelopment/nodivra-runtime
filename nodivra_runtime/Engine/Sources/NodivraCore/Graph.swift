@@ -3,18 +3,24 @@ import Foundation
 public enum BlockKind: String, Codable, CaseIterable, Sendable {
     case state, stateMatch, numeric, constant, timeWindow, button, and, or, xor, not, onDelay, offDelay, pulse, latch, output
     case haTrigger, haCondition, haAction
+    case digitalInput, analogInput, digitalOutput, analogOutput, marker, analogMarker, markerContact, analogContact, analogCompare
     public var label: String {
         switch self {
         case .state: "Ein-/Aus-Zustand"; case .stateMatch: "Zustand vergleichen"; case .numeric: "Zahlenvergleich"
         case .timeWindow: "Zeitfenster"; case .constant: "Konstante"; case .button: "Taster / Schalter"; case .and: "UND"; case .or: "ODER"
         case .xor: "Exklusiv ODER"; case .not: "NICHT"; case .onDelay: "Einschaltverzögerung"
         case .offDelay: "Ausschaltverzögerung"; case .pulse: "Zeitimpuls"; case .latch: "Setzen / Rücksetzen"
+        case .digitalInput: "Digitaler Eingang"; case .analogInput: "Analoger Eingang"
+        case .digitalOutput: "Digitaler Ausgang"; case .analogOutput: "Analoger Ausgang"
+        case .marker: "Merker"; case .analogMarker: "Analogmerker"
+        case .markerContact: "Merkerkontakt"; case .analogContact: "Analogkontakt"
+        case .analogCompare: "Analogwert vergleichen"
         case .output: "Schaltausgang"; case .haTrigger: "Auslöser"; case .haCondition: "Bedingung"; case .haAction: "Aktion"
         }
     }
     public var inputCount: Int {
         switch self {
-        case .state, .stateMatch, .numeric, .constant, .timeWindow, .button, .haTrigger: 0
+        case .state, .stateMatch, .numeric, .constant, .timeWindow, .button, .haTrigger, .digitalInput, .analogInput, .markerContact, .analogContact: 0
         case .and, .or, .xor, .latch: 2
         default: 1
         }
@@ -29,6 +35,10 @@ public enum BlockKind: String, Codable, CaseIterable, Sendable {
         case .state, .stateMatch: "sensor"; case .numeric: "number"; case .constant: "number.square"; case .timeWindow: "clock"
         case .button: "button.programmable"; case .and: "arrow.triangle.merge"; case .or, .xor: "arrow.triangle.branch"
         case .not: "plus.forwardslash.minus"; case .onDelay, .offDelay: "timer"; case .pulse: "waveform.path"
+        case .digitalInput, .analogInput: "arrow.right.square"
+        case .digitalOutput, .analogOutput: "arrow.left.square"
+        case .marker, .analogMarker, .markerContact, .analogContact: "memorychip"
+        case .analogCompare: "number.circle"
         case .latch: "memorychip"; case .output: "lightbulb"; case .haTrigger: "bolt"
         case .haCondition: "line.3.horizontal.decrease.circle"; case .haAction: "play.square"
         }
@@ -86,7 +96,7 @@ public struct AutomationGraph: Codable, Equatable, Sendable {
     public var blocks: [Block]
     public var wires: [Wire]
     public var importContext: ImportContext?
-    public init(id: UUID = UUID(), title: String, blocks: [Block], wires: [Wire]) { self.id = id; self.title = title; self.blocks = blocks; self.wires = wires }
+    public init(id: UUID = UUID(), title: String, blocks: [Block], wires: [Wire]) { self.id = id; self.title = title; self.blocks = blocks; self.wires = wires; if blocks.contains(where: { $0.kind.isPLC }) { formatVersion = 3 } }
     /// Preserve native event sequences until a signal source/adapter is used.
     public var isFlow: Bool {
         !blocks.isEmpty && blocks.allSatisfy { $0.kind.isFlow } &&

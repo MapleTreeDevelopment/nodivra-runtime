@@ -1,5 +1,5 @@
 name: Nodivra Runtime
-version: "0.1.1"
+version: "0.2.0"
 slug: nodivra_runtime
 description: Führt geprüfte Nodivra-Blockautomationen unabhängig vom Mac aus.
 arch:

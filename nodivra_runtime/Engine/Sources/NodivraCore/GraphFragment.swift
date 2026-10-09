@@ -27,7 +27,9 @@ public struct GraphFragment: Codable, Equatable, Sendable {
         var result = self
         let mapping = Dictionary(uniqueKeysWithValues: blocks.map { ($0.id, UUID()) })
         result.blocks = blocks.map { block in
-            var b = block; b.id = mapping[block.id]!; b.x += dx; b.y += dy; return b
+            var b = block; b.id = mapping[block.id]!; b.x += dx; b.y += dy
+            if let reference = block.markerID, let replacement = mapping[reference] { b.options["markerID"] = .string(replacement.uuidString) }
+            return b
         }
         result.wires = wires.map { .init(source: mapping[$0.source]!, target: mapping[$0.target]!, input: $0.input) }
         return result

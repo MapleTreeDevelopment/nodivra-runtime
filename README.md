@@ -2,7 +2,7 @@
 
 A local execution service for Nodivra block automations on Home Assistant OS.
 
-**Early preview · 0.1.1.** The macOS editor is a separate application. This repository contains only the runtime, its shared Swift engine, and protocol tests. It does not contain user projects or credentials.
+**Early preview · 0.2.0.** The macOS editor is a separate application. This repository contains only the runtime, its shared Swift engine, and protocol tests. It does not contain user projects or credentials.
 
 ## Install
 
@@ -18,7 +18,7 @@ The initial installation builds the image from source and needs internet access 
 
 The Home Assistant ingress page generates 256-bit random access keys, hides them by default, and can copy and save them directly to the app options. A replacement of an existing valid key requires confirmation. Configuration writes are read back before the runtime uses the new key. The page is accessible only through the Supervisor ingress proxy, never through port 8668. No additional Supervisor manager/admin role is required.
 
-Nodivra 0.11.1 checks Home Assistant for available runtime releases and shows this package's changelog. Updates use a new full backup and a persistent progress journal, then verify the installed version and connection. Running programs remain paused after restart. [Changelog](nodivra_runtime/CHANGELOG.md).
+Nodivra 0.12.0 checks Home Assistant for available runtime releases and shows this package's changelog. Updates use a new full backup and a persistent progress journal, then verify the installed version and connection. Running programs remain paused after restart. [Changelog](nodivra_runtime/CHANGELOG.md).
 
 ## First automation
 
@@ -41,3 +41,9 @@ docker run --rm --entrypoint /opt/nodivra/venv/bin/python \
 ```
 
 Tests use local fake Home Assistant services and never operate actual devices. Dependencies are pinned in the package and requirements file. Third-party dependencies retain their own licenses.
+
+## PLC foundation (protocol 2)
+
+Digital and analog inputs/outputs, program-local virtual inputs, M/AM markers and contacts, and analog comparisons are supported. Markers publish the previous cycle value and commit simultaneously at cycle end. The runtime samples one process image per cycle (target 100 ms, not hard realtime). Shorter pulses may be missed; service calls can delay cycles. Older protocol-1 programs keep their event-frame behavior. Marker values are not yet retained across restarts. Programs restart paused.
+
+Use the macOS dashboard input panel for virtual controls. Live visualization is read-only. Observe mode never sends device actions. Transfers remain disabled until explicitly started. New PLC programs require the matching Nodivra 0.12 editor and Runtime 0.2.

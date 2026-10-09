@@ -140,11 +140,107 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             if not ws.closed: await ws.send_json({'id':1,'type':'event','event':{'data':{'entity_id':'binary_sensor.test','old_state':{'state':before},'new_state':{'state':state}}}})
         await asyncio.sleep(.15)
 
+    def plc_package(self, analog=False, entity=''):
+        source = block('analogInput' if analog else 'digitalInput', {'minimum': -10, 'maximum': 100, 'initial': 0} if analog else {}, entity=entity)
+        marker = block('analogMarker' if analog else 'marker')
+        contact = block('analogContact' if analog else 'markerContact', {'markerID': marker['id']})
+        output = block('analogOutput' if analog else 'digitalOutput')
+        pairs = [(source, marker), (contact, output)]
+        wires = [dict(id=str(uuid.uuid4()), source=a['id'], target=b['id'], input=0) for a,b in pairs]
+        return dict(protocolVersion=2, timeZone='Europe/Berlin', graph=dict(formatVersion=3, id=str(uuid.uuid4()), title='PLC', blocks=[source, marker, contact, output], wires=wires))
+
+    async def test_plc_virtual_inputs_are_program_scoped_and_revision_checked(self):
+        p = self.plc_package(); r = await self.upload(p); await self.enable(r)
+        other = await self.upload(self.plc_package()); await self.enable(other)
+        source, marker, contact, output = p['graph']['blocks']
+        path = 'automations/' + r['id'] + '/inputs/' + source['id']
+        await self.request('POST', path, dict(expectedRevision='stale', value=True), expected=409)
+        await self.request('POST', path, dict(expectedRevision=r['revision'], value='on'), expected=422)
+        values = await self.request('POST', path, dict(expectedRevision=r['revision'], value=True))
+        self.assertIs(values['values'][source['id']], True)
+        await asyncio.sleep(.35)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertIs(live['signals'][marker['id'].upper()], True)
+        self.assertIs(live['signals'][contact['id'].upper()], True)
+        self.assertIs(live['signals'][output['id'].upper()], True)
+        other_inputs = await self.request('GET', 'automations/' + other['id'] + '/inputs')
+        self.assertEqual(list(other_inputs['values'].values()), [False])
+        self.assertEqual(self.calls, [])
+        await self.request('POST', 'automations/' + r['id'] + '/inputs/' + marker['id'], dict(expectedRevision=r['revision'], value=True), expected=422)
+        await self.request('POST', 'automations/' + r['id'] + '/state', dict(enabled=False, mode='observe', expectedRevision=r['revision']))
+        await self.request('POST', path, dict(expectedRevision=r['revision'], value=True), expected=409)
+        await self.enable(r)
+        self.assertIs((await self.request('GET', 'automations/' + r['id'] + '/inputs'))['values'][source['id']], False)
+
+    async def test_plc_analog_control_checks_bounds_and_types(self):
+        p = self.plc_package(analog=True); r = await self.upload(p); await self.enable(r)
+        source, marker, contact, output = p['graph']['blocks']
+        path = 'automations/' + r['id'] + '/inputs/' + source['id']
+        for value in [-11, 101, True, '25', None]:
+            await self.request('POST', path, dict(expectedRevision=r['revision'], value=value), expected=422)
+        await self.request('POST', path, dict(expectedRevision=r['revision'], value=23.5))
+        await asyncio.sleep(.35)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertEqual(live['analogSignals'][output['id'].upper()], 23.5)
+        self.assertNotIn(output['id'].upper(), live['signals'])
+        self.assertEqual(self.calls, [])
+
+    async def test_plc_attributes_updated_atomically_and_unavailable_clears_them(self):
+        p = self.plc_package(analog=True, entity='climate.test')
+        source, marker, contact, output = p['graph']['blocks']
+        source['options']['attribute'] = 'current_temperature'
+        r = await self.upload(p); await self.enable(r)
+        self.runtime.ha.apply_state({'entity_id': 'climate.test', 'new_state': {'state': 'heat', 'attributes': {'current_temperature': 24.5}}})
+        await asyncio.sleep(.35)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertEqual(live['analogSignals'][output['id'].upper()], 24.5)
+        self.runtime.ha.apply_state({'entity_id': 'climate.test', 'new_state': {'state': 'unavailable', 'attributes': {'current_temperature': 24.5}}})
+        await asyncio.sleep(.35)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertNotIn(output['id'].upper(), live['analogSignals'])
+        self.assertNotIn('climate.test#current_temperature', self.runtime.ha.states)
+        await self.request('POST', 'automations/' + r['id'] + '/inputs/' + source['id'], dict(expectedRevision=r['revision'], value=25), expected=422)
+
+    async def test_plc_scan_uses_one_process_image_not_one_cycle_per_event(self):
+        p = self.plc_package(entity='binary_sensor.test'); r = await self.upload(p); await self.enable(r)
+        self.runtime.ticker.cancel()
+        with __import__('contextlib').suppress(asyncio.CancelledError):
+            await self.runtime.ticker
+        await asyncio.gather(*self.runtime.tasks.values(), return_exceptions=True)
+        source, marker, contact, output = p['graph']['blocks']
+        before = self.runtime.snapshots[r['id']]['cycle']
+        for value in ['on', 'off', 'on']:
+            self.runtime.ha.apply_state({'entity_id': 'binary_sensor.test', 'new_state': {'state': value}})
+        await self.runtime.step(r['id'])
+        first = self.runtime.snapshots[r['id']]
+        self.assertEqual(first['cycle'], before + 1)
+        self.assertIs(first['signals'][source['id'].upper()], True)
+        self.assertIs(first['signals'][output['id'].upper()], False)
+        await self.runtime.step(r['id'])
+        self.assertIs(self.runtime.snapshots[r['id']]['signals'][output['id'].upper()], True)
+
+    async def test_plc_observe_mode_never_sends_real_output(self):
+        p = self.plc_package(); p['graph']['blocks'][-1]['entityID'] = 'light.test'
+        r = await self.upload(p); await self.enable(r)
+        source = p['graph']['blocks'][0]
+        await self.request('POST', 'automations/' + r['id'] + '/inputs/' + source['id'], dict(expectedRevision=r['revision'], value=True))
+        await asyncio.sleep(.4)
+        self.assertEqual(self.calls, [])
+        self.assertTrue(any(e['kind'] == 'observe' for e in (await self.request('GET', 'events'))['events']))
+
+    async def test_plc_internal_only_program_survives_ha_disconnect(self):
+        p = self.plc_package(); r = await self.upload(p); await self.enable(r)
+        for ws in self.sockets:
+            await ws.close()
+        await asyncio.sleep(.25)
+        self.assertTrue(self.runtime.record(r['id'])['enabled'])
+        await self.request('GET', 'automations/' + r['id'] + '/inputs')
+
     async def test_authentication_and_no_browser_origin(self):
         async with ClientSession() as client:
             async with client.get(f'http://127.0.0.1:{self.port}/api/v1/status') as response: self.assertEqual(response.status,401)
         async with self.client.get(f'http://127.0.0.1:{self.port}/api/v1/status',headers={'Origin':'http://untrusted.test'}) as response: self.assertEqual(response.status,403)
-        self.assertEqual((await self.request('GET','status'))['protocolVersion'],1)
+        self.assertEqual((await self.request('GET','status'))['protocolVersion'],2)
 
     async def test_transfer_disabled_idempotent_and_conflict(self):
         p=package();request_id=str(uuid.uuid4());r=await self.upload(p,request_id=request_id)
