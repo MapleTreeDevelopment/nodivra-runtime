@@ -1,3 +1,13 @@
+# 0.6.0
+
+- Neues Dashboard direkt in Home Assistant: Runtime-/HA-Version, Verbindung, Engine-Status und Übersicht gespeicherter Nodivra-Automationen.
+- Suche, Statusfilter und Sortierung; Erstellungsdatum, letzte Änderung und letzte bestätigte Ausführung. Aktivierung und Beobachtung werden separat ausgewiesen.
+- Automationen direkt aktivieren, beobachten und deaktivieren. Gleichzeitige Änderungen aus der Mac-App oder einem zweiten Fenster werden erkannt.
+- „In Seitenleiste anzeigen“ bindet das Dashboard in die Home-Assistant-Seitenleiste ein.
+- Zugangsschlüssel weiterhin unter „Zugang & Einstellungen“ erzeugen und verwalten. Bestehende Schlüssel bleiben erhalten.
+- Zeitangaben bleiben nach Neustarts und Protokollkürzungen erhalten. Bei älteren Programmen wird ein unbekanntes Erstellungsdatum als nicht erfasst angezeigt.
+- Additive Datenbankerweiterung mit vorheriger Sicherung. Protokoll 5 bleibt unverändert; die vorhandene Mac-App 0.15.1 ist kompatibel. Programme bleiben nach dem Update pausiert.
+
 # 0.5.0
 
 - Verknüpfbare Aktionsparameter: Zahlen, Ein/Aus, Texte, Listen und Objekte, einschließlich verschachtelter Felder und Ziele.

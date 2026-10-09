@@ -14,7 +14,7 @@ import uuid
 from collections import deque
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
@@ -66,6 +66,7 @@ class HomeAssistant:
         self.history = deque(maxlen=2000)
         self.connected = False
         self.services = {}
+        self.version = ""
         self.ws = None
         self.waiting = {}
         self.serial = 10
@@ -93,7 +94,9 @@ class HomeAssistant:
                     if (await ws.receive_json(timeout=10)).get("type") != "auth_required":
                         raise RuntimeError("HA-Authentifizierung nicht verfügbar")
                     await ws.send_json({"type": "auth", "access_token": self.token})
-                    if (await ws.receive_json(timeout=10)).get("type") != "auth_ok":
+                    authenticated = await ws.receive_json(timeout=10)
+                    self.version = authenticated.get("ha_version", "")
+                    if authenticated.get("type") != "auth_ok":
                         raise RuntimeError("HA-Authentifizierung fehlgeschlagen")
                     # Subscribe before requesting the snapshot: no lost state changes.
                     await ws.send_json({"id": 1, "type": "subscribe_events", "event_type": "state_changed"})
@@ -237,12 +240,26 @@ class Runtime:
         self.db = sqlite3.connect(path / "runtime.sqlite")
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=FULL")
+        # Additive migration: 0.5 can still open the original tables on rollback.
+        tables = {row[0] for row in self.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "programs" in tables and "program_metadata" not in tables:
+            self.backup()
         self.db.executescript("""
         CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS programs(id TEXT PRIMARY KEY, revision TEXT NOT NULL, package TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0, mode TEXT NOT NULL DEFAULT 'observe', error TEXT, updated REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS revisions(id TEXT, revision TEXT, package TEXT, created REAL, PRIMARY KEY(id,revision));
         CREATE TABLE IF NOT EXISTS transfers(request_id TEXT PRIMARY KEY, digest TEXT, response TEXT);
         CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, automation_id TEXT, block_id TEXT, kind TEXT NOT NULL, message TEXT NOT NULL, created REAL NOT NULL);
+        """)
+        self.db.executescript("""
+        CREATE TABLE IF NOT EXISTS program_metadata(id TEXT PRIMARY KEY, created REAL, last_started REAL, last_executed REAL, last_observed REAL, control_version INTEGER NOT NULL DEFAULT 0);
+        INSERT OR IGNORE INTO program_metadata(id,last_started,last_executed,last_observed)
+          SELECT p.id,
+            (SELECT MAX(created) FROM events WHERE automation_id=p.id AND kind='started'),
+            (SELECT MAX(created) FROM events WHERE automation_id=p.id AND kind='action'),
+            (SELECT MAX(created) FROM events WHERE automation_id=p.id AND kind='observe')
+          FROM programs p;
+        UPDATE program_metadata SET control_version=control_version+1 WHERE id IN (SELECT id FROM programs WHERE enabled=1);
         """)
         if not self.db.execute("SELECT value FROM meta WHERE key='serverID'").fetchone():
             self.db.execute("INSERT INTO meta VALUES ('serverID',?)", (str(uuid.uuid4()),))
@@ -272,13 +289,34 @@ class Runtime:
         row = self.db.execute("SELECT id,revision,package,enabled,mode,error,updated FROM programs WHERE id=?", (identity,)).fetchone()
         if not row:
             return None
-        return dict(id=row[0], revision=row[1], package=json.loads(row[2]), enabled=bool(row[3]), mode=row[4], error=row[5], updated=row[6])
+        return dict(id=row[0], revision=row[1], package=json.loads(row[2]), enabled=bool(row[3]), mode=row[4], error=row[5], updated=row[6]) | self.metadata(identity)
 
     def records(self):
         return [self.record(r[0]) for r in self.db.execute("SELECT id FROM programs ORDER BY updated DESC").fetchall()]
 
+    def metadata(self, identity):
+        row = self.db.execute("SELECT created,last_started,last_executed,last_observed,control_version FROM program_metadata WHERE id=?", (identity,)).fetchone()
+        return dict(created=row[0], lastStarted=row[1], lastExecuted=row[2], lastObserved=row[3], stateVersion=row[4]) if row else {}
+
+    def dashboard(self):
+        records = self.records()
+        return {"version": VERSION, "protocolVersion": 5, "serverID": self.server_id,
+                "homeAssistantVersion": self.ha.version, "homeAssistantConnected": self.ha.connected,
+                "startedAt": self.started, "restartPolicy": "pause", "observedAt": time.time(),
+                "engineReady": self.engine.process is not None and self.engine.process.returncode is None,
+                "automations": [{k: v for k, v in record.items() if k != "package"} |
+                                {"title": record["package"]["graph"]["title"],
+                                 "blocks": len(record["package"]["graph"]["blocks"])} for record in records]}
+
     def event(self, identity, kind, message, block=None):
-        self.db.execute("INSERT INTO events(automation_id,block_id,kind,message,created) VALUES(?,?,?,?,?)", (identity, block, kind, message[:2000], time.time()))
+        now = time.time()
+        self.db.execute("INSERT INTO events(automation_id,block_id,kind,message,created) VALUES(?,?,?,?,?)", (identity, block, kind, message[:2000], now))
+        column = {"started": "last_started", "action": "last_executed", "observe": "last_observed"}.get(kind)
+        if kind == "log":
+            row = self.db.execute("SELECT mode FROM programs WHERE id=?", (identity,)).fetchone()
+            column = "last_observed" if row and row[0] == "observe" else "last_executed"
+        if column:
+            self.db.execute("UPDATE program_metadata SET " + column + "=? WHERE id=?", (now, identity))
         self.db.execute("DELETE FROM events WHERE id <= (SELECT MAX(id)-1000 FROM events)")
         self.db.commit()
 
@@ -313,6 +351,7 @@ class Runtime:
         self.virtual_values.pop(identity, None)
         self.snapshots.pop(identity, None)
         self.db.execute("UPDATE programs SET enabled=0,error=? WHERE id=?", (message, identity))
+        self.db.execute("UPDATE program_metadata SET control_version=control_version+1 WHERE id=?", (identity,))
         self.db.commit()
         with contextlib.suppress(Exception):
             await self.engine.call(op="drop", id=identity)
@@ -490,6 +529,7 @@ class Runtime:
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO revisions VALUES(?,?,?,?)", (identity, revision, text, time.time()))
                 self.db.execute("INSERT OR REPLACE INTO programs VALUES(?,?,?,0,'observe',NULL,?)", (identity, revision, text, time.time()))
+                self.db.execute("INSERT INTO program_metadata(id,created) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET control_version=control_version+1", (identity, time.time()))
                 result = self.record(identity)
                 self.db.execute("INSERT INTO transfers VALUES(?,?,?)", (request_id, digest, canonical(result)))
                 # Bound historical storage while retaining the newest ten revisions per program.
@@ -501,7 +541,10 @@ class Runtime:
     async def set_state(self, request):
         identity = request.match_info["id"]
         data = await request.json()
-        if type(data.get("enabled")) is not bool or data.get("mode", "observe") not in ("observe", "execute"):
+        return await self.change_state(identity, data)
+
+    async def change_state(self, identity, data):
+        if not isinstance(data, dict) or type(data.get("enabled")) is not bool or data.get("mode", "observe") not in ("observe", "execute"):
             return problem(422, "Ungültiger Ausführungsmodus.")
         async with self.lock(identity):
             record = self.record(identity)
@@ -509,8 +552,11 @@ class Runtime:
                 return problem(404, "Automation nicht gefunden.")
             if record["revision"] != data.get("expectedRevision"):
                 return problem(409, "Die Serverfassung stimmt nicht mit der Vorschau überein.")
+            if "expectedStateVersion" in data and (type(data["expectedStateVersion"]) is not int or data["expectedStateVersion"] != record["stateVersion"]):
+                return problem(409, "Der Ausführungsstatus wurde geändert. Bitte neu laden und erneut auswählen.")
             if not data["enabled"]:
-                await self.pause(identity, "Vom Nutzer pausiert.")
+                if record["enabled"]:
+                    await self.pause(identity, "Vom Nutzer pausiert.")
             else:
                 mode = data.get("mode", "observe")
                 if identity in self.running:
@@ -543,6 +589,7 @@ class Runtime:
                 self.inputs[identity] = set(check["inputs"])
                 self.running[identity] = time.monotonic()
                 self.db.execute("UPDATE programs SET enabled=1,mode=?,error=NULL WHERE id=?", (mode, identity))
+                self.db.execute("UPDATE program_metadata SET control_version=control_version+1 WHERE id=?", (identity,))
                 self.db.commit()
                 self.event(identity, "started", "Beobachten gestartet. Geräteaktionen werden nur protokolliert." if mode == "observe" else "Ausführung gestartet. Geräteaktionen sind freigegeben.")
             return web.json_response(self.record(identity))

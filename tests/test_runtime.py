@@ -450,4 +450,66 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         await self.request('PUT','automations/'+p['graph']['id'],dict(package=p,expectedRevision=None,requestID=str(uuid.uuid4())),expected=422)
         self.assertEqual(self.runtime.records(),[])
 
+
+    async def test_dashboard_timestamps_distinguish_observing_starting_and_execution(self):
+        r = await self.upload(package(service='light.turn_on'))
+        self.assertIsNotNone(r['created']); self.assertIsNone(r['lastExecuted'])
+        created, updated = r['created'], r['updated']
+        await self.enable(r, 'observe')
+        await self.state('on')
+        current = self.runtime.record(r['id'])
+        self.assertIsNotNone(current['lastStarted']); self.assertIsNotNone(current['lastObserved'])
+        self.assertIsNone(current['lastExecuted']); self.assertEqual(self.calls, [])
+        await self.request('POST', 'automations/'+r['id']+'/state', dict(enabled=False, mode='observe', expectedRevision=r['revision']))
+        await self.state('off'); await self.enable(r, 'execute'); await self.state('on')
+        current = self.runtime.record(r['id'])
+        self.assertIsNotNone(current['lastExecuted']); self.assertEqual(current['created'], created); self.assertEqual(current['updated'], updated)
+        self.assertEqual(len(self.calls), 1)
+        summary = self.runtime.dashboard()
+        self.assertNotIn('package', summary['automations'][0]); self.assertEqual(summary['automations'][0]['title'], 'Integrationstest')
+        executed = current['lastExecuted']
+        self.runtime.db.execute('DELETE FROM events'); self.runtime.db.commit()
+        p = current['package']; p['graph']['title'] = 'Neue Fassung'
+        changed = await self.upload(p, expected=r['revision'])
+        self.assertEqual(changed['created'], created); self.assertEqual(changed['lastExecuted'], executed)
+        self.assertGreater(changed['updated'], updated)
+        recovery = server.Runtime(self.directory.name, KEY, ENGINE, 'http://unused/api', '')
+        self.assertEqual(recovery.record(r['id'])['lastExecuted'], executed)
+        self.assertEqual(recovery.record(r['id'])['created'], created)
+        recovery.db.close()
+
+    async def test_failed_device_action_does_not_claim_execution(self):
+        r = await self.upload(package(service='light.turn_on')); await self.enable(r, 'execute')
+        self.reject_actions = True
+        await self.state('on')
+        self.assertFalse(self.runtime.record(r['id'])['enabled'])
+        self.assertIsNone(self.runtime.record(r['id'])['lastExecuted'])
+
+    async def test_stale_state_version_cannot_restart_a_changed_program(self):
+        r = await self.upload(package())
+        active = await self.enable(r)
+        self.assertGreater(active['stateVersion'], r['stateVersion'])
+        await self.request('POST', 'automations/'+r['id']+'/state', dict(enabled=False, expectedRevision=r['revision'], expectedStateVersion=r['stateVersion']), expected=409)
+        self.assertTrue(self.runtime.record(r['id'])['enabled'])
+        paused = await self.request('POST', 'automations/'+r['id']+'/state', dict(enabled=False, expectedRevision=r['revision'], expectedStateVersion=active['stateVersion']))
+        self.assertGreater(paused['stateVersion'], active['stateVersion'])
+        await self.request('POST', 'automations/'+r['id']+'/state', dict(enabled=True, mode='observe', expectedRevision=r['revision'], expectedStateVersion=active['stateVersion']), expected=409)
+        self.assertFalse(self.runtime.record(r['id'])['enabled'])
+
+    async def test_legacy_database_migration_is_backed_up_and_keeps_unknown_creation(self):
+        r = await self.upload(package())
+        self.runtime.db.execute('DROP TABLE program_metadata'); self.runtime.db.commit()
+        before = set(self.runtime.backup_path.glob('*.sqlite'))
+        migrated = server.Runtime(self.directory.name, KEY, ENGINE, 'http://unused/api', '')
+        self.assertIsNone(migrated.record(r['id'])['created'])
+        self.assertEqual(migrated.record(r['id'])['updated'], r['updated'])
+        after = set(migrated.backup_path.glob('*.sqlite'))
+        self.assertEqual(len(after-before), 1)
+        import sqlite3
+        with sqlite3.connect(next(iter(after-before))) as backup:
+            self.assertEqual(backup.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
+            self.assertEqual(backup.execute('SELECT revision FROM programs').fetchone()[0], r['revision'])
+            self.assertIsNone(backup.execute("SELECT name FROM sqlite_master WHERE name='program_metadata'").fetchone())
+        migrated.db.close()
+
 if __name__=='__main__': unittest.main(verbosity=2)

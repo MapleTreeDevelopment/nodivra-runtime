@@ -4,6 +4,9 @@ import hashlib
 import hmac
 from pathlib import Path
 import secrets
+import time
+import platform
+import uuid
 from aiohttp import web, ClientSession, ClientTimeout
 
 class RuntimeConfiguration:
@@ -11,6 +14,8 @@ class RuntimeConfiguration:
         self.runtime, self.token, self.supervisor = runtime, token, supervisor
         self.csrf = secrets.token_urlsafe(32)
         self.lock = asyncio.Lock()
+        self.info_cache = None
+        self.info_at = 0
 
     async def call(self, method, path, data=None):
         async with ClientSession(timeout=ClientTimeout(total=15)) as session:
@@ -36,10 +41,12 @@ class RuntimeConfiguration:
                 if request.path != "/" and not await self.runtime.ha.is_admin(request.headers.get("X-Remote-User-Id", "")):
                     return web.json_response({"error": "Bitte mit einem Home-Assistant-Administratorkonto öffnen. Falls Home Assistant gerade startet, die Seite anschließend neu laden."}, status=403, headers={"Cache-Control": "no-store"})
                 response = await handler(request)
+            except web.HTTPException as error:
+                response = web.json_response({"error": "Anfrage konnte nicht verarbeitet werden."}, status=error.status)
             except (ValueError, TypeError, KeyError):
                 response = web.json_response({"error": "Ungültige Anfrage."}, status=422)
             except Exception:
-                response = web.json_response({"error": "Speichern nicht bestätigt. Bitte die Konfiguration erneut öffnen; kein Schlüssel wird automatisch wiederholt ersetzt."}, status=503)
+                response = web.json_response({"error": "Anfrage nicht bestätigt. Bitte den aktuellen Status neu laden, bevor du die Aktion erneut ausführst."}, status=503)
             response.headers.update({"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
                 "X-Content-Type-Options": "nosniff",
                 "Content-Security-Policy": "default-src 'none'; script-src 'nonce-" + self.csrf + "'; style-src 'nonce-" + self.csrf + "'; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'"})
@@ -47,6 +54,9 @@ class RuntimeConfiguration:
         app = web.Application(middlewares=[boundary], client_max_size=8192)
         app.router.add_get("/", self.page)
         app.router.add_get("/status", self.status)
+        app.router.add_get("/dashboard", self.dashboard)
+        app.router.add_post("/automations/{id}/state", self.program_state)
+        app.router.add_post("/sidebar", self.sidebar)
         app.router.add_post("/generate", self.generate)
         app.router.add_post("/apply", self.apply)
         return app
@@ -60,6 +70,56 @@ class RuntimeConfiguration:
         # Hash is a concurrency token, not the credential itself.
         return web.json_response({"configured": len(key) >= 32, "revision": hashlib.sha256(key.encode()).hexdigest(),
                                   "version": info.get("version", ""), "connected": self.runtime.ha.connected})
+
+    @staticmethod
+    def addon_summary(info):
+        return {"installedVersion": info.get("version"), "latestVersion": info.get("version_latest"),
+                "updateAvailable": info.get("update_available") is True,
+                "sidebarEnabled": info.get("ingress_panel"), "sidebarSupported": info.get("ingress") is True}
+
+    async def dashboard(self, request):
+        unavailable = False
+        if self.info_cache is None or time.monotonic() - self.info_at > 15:
+            try:
+                self.info_cache = self.addon_summary(await self.call("GET", "/addons/self/info"))
+                self.info_at = time.monotonic()
+            except Exception:
+                unavailable = True
+        return web.json_response(self.runtime.dashboard() | {"addon": None if unavailable else self.info_cache,
+                                "architecture": platform.machine(), "configured": len(self.runtime.key) >= 32})
+
+    async def program_state(self, request):
+        identity = str(uuid.UUID(request.match_info["id"]))
+        data = await request.json()
+        if not isinstance(data, dict) or type(data.get("expectedStateVersion")) is not int:
+            return web.json_response({"error": "Status zuerst aktualisieren."}, status=422)
+        if data.get("enabled") is True and data.get("mode") == "execute" and data.get("confirmExecution") is not True:
+            return web.json_response({"error": "Bitte das Aktivieren mit Geräteaktionen bestätigen."}, status=409)
+        # The Mac API and ingress share the same locks, validation and lifecycle.
+        response = await self.runtime.change_state(identity, data)
+        return web.json_response({"updated": True}) if response.status == 200 else response
+
+    async def sidebar(self, request):
+        data = await request.json()
+        if not isinstance(data, dict) or type(data.get("enabled")) is not bool or type(data.get("expected")) is not bool:
+            raise ValueError("Invalid sidebar setting")
+        async with self.lock:
+            info = await self.call("GET", "/addons/self/info")
+            if info.get("ingress") is not True:
+                return web.json_response({"error": "Home Assistant bietet für diese Installation keine Seitenleisten-Einbindung an."}, status=409)
+            if info.get("ingress_panel") != data["expected"]:
+                return web.json_response({"error": "Die Seitenleisten-Einstellung wurde geändert. Bitte neu laden."}, status=409)
+            if info.get("ingress_panel") != data["enabled"]:
+                try:
+                    await self.call("POST", "/addons/self/options", {"ingress_panel": data["enabled"]})
+                except Exception:
+                    pass  # Read back ambiguous writes; never repeat a mutation automatically.
+            saved = await self.call("GET", "/addons/self/info")
+            if saved.get("ingress_panel") != data["enabled"]:
+                raise RuntimeError("Unconfirmed sidebar change")
+            self.info_cache = self.addon_summary(saved)
+            self.info_at = time.monotonic()
+            return web.json_response({"enabled": saved["ingress_panel"]})
 
     async def generate(self, request):
         return web.json_response({"key": secrets.token_hex(32)})
