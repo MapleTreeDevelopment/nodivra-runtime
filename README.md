@@ -1,49 +1,84 @@
-# Nodivra Runtime
+# Nodivra Runtime 0.3.0
 
-A local execution service for Nodivra block automations on Home Assistant OS.
+HA-OS-App-Paket für amd64 und aarch64. Runtime 0.3 ergänzt erweiterbare Logikanschlüsse und 40 Grund-/Sonderfunktionen. Neue Programme verwenden Protokoll 3, die bisherigen Protokolle 1 und 2 bleiben unterstützt. Engine und API besitzen automatisierte Tests mit isoliertem HA-Testserver. Die Abnahme auf einer echten HA-Installation und unter Dauerlast ist separat erforderlich. Automatische Einrichtung über https://github.com/MapleTreeDevelopment/nodivra-runtime; das lokale ZIP bleibt als manueller Weg erhalten.
 
-**Early preview · 0.2.0.** The macOS editor is a separate application. This repository contains only the runtime, its shared Swift engine, and protocol tests. It does not contain user projects or credentials.
+## Installation aus Nodivra
 
-## Install
+Dashboard → **Installation**. Home Assistant mit einem Administratorkonto verbinden. Der Assistent zeigt die Installationsquelle und die Runtime-Adresse. Lokales HTTP muss ausdrücklich erlaubt werden. **Mit Sicherung installieren** führt acht Schritte aus:
 
-Use the installation assistant in Nodivra. It checks Home Assistant OS and administrator access, creates and verifies the metadata of a full local backup, adds this repository, installs the matching runtime, saves its access key in the Mac Keychain, and checks the connection. Each step remains visible and interrupted requests are reconciled before continuing.
+1. HA OS, unterstützte Architektur, Systemzustand und Administratorzugriff prüfen.
+2. Vollständige lokale HA-Sicherung einschließlich Datenbank erstellen.
+3. Sicherungskennung, Typ, Umfang und Größe zurücklesen. Die Prüfung bestätigt Metadaten; sie ist kein Wiederherstellungstest.
+4. Runtime-Repository einrichten und die erwartete Paketversion prüfen.
+5. Runtime installieren oder die passende vorhandene Installation übernehmen.
+6. Zugangsschlüssel erzeugen und im Mac-Schlüsselbund sichern; vorhandene Schlüssel und weitere Optionen bleiben erhalten.
+7. Runtime starten, ohne Automationen zu aktivieren.
+8. API, Engine und HA-Verbindung prüfen.
 
-Repository URL: `https://github.com/MapleTreeDevelopment/nodivra-runtime`
+Der Gesamtbalken zeigt abgeschlossene Schritte. Prozentwerte innerhalb eines Schritts stammen vom Supervisor-Auftrag. Verstrichene Zeit wird zusätzlich angezeigt. Die geschätzte Restzeit beschreibt nur diesen Auftrag, nicht die komplette Installation. Sie setzt mehrere gleichmäßige Fortschrittssprünge voraus und wird bei Phasenwechseln oder länger unverändertem Fortschritt ausgeblendet. Bei 0 % bleibt die Aktivitätsanzeige mit „Restzeit noch nicht abschätzbar“ sichtbar. Schließen lässt die Beobachtung weiterlaufen; **Später fortsetzen** unterbricht nur die Beobachtung. HA-Aufträge können weiterlaufen. **Status prüfen & fortsetzen** liest zuerst den Zustand zurück und sendet unbestätigte Schreibaufträge nicht erneut. Protokolle liegen im App-Datenordner unter `Nodivra/Installations`; sie enthalten keine Zugangsschlüssel. Ein nicht lesbares Protokoll blockiert einen neuen Auftrag, damit keine unbekannte Installation wiederholt wird.
 
-For manual installation, add this URL under Home Assistant Settings → Apps → App store → Repositories, install Nodivra Runtime, then start it and choose **Open Web UI**. In the Runtime configuration, use **Generate key**, then **Save & use key**. Copy the generated key into Nodivra; no manual password invention is needed. An unconfigured runtime keeps its LAN API locked until a key is saved. The API listens on local port 8668. Keep that port on a trusted local network; do not expose it directly to the internet. Local HTTP requires explicit permission in Nodivra. The runtime requires a supported, healthy Home Assistant OS installation and amd64 or aarch64 hardware. It never updates the OS.
+Die Sicherung liegt zunächst auf dem HA-Datenträger. Unter Einstellungen → System → Sicherungen zusätzlich herunterladen. Nodivra aktualisiert das Betriebssystem nicht und übergeht keine Supervisor-Sperre.
 
-The initial installation builds the image from source and needs internet access and sufficient free memory and disk space. Linux CI builds the same image and runs protocol tests on both supported architectures; check the latest workflow result before using a revision.
+## Manueller Ersatzweg nach Freigabe des HA-OS-Updates
 
-## Runtime configuration and updates
+1. Vollständige HA-Sicherung erstellen und herunterladen. Bei einer VM zusätzlich einen Snapshot des ausgeschalteten Systems anlegen, bevor das Betriebssystem verändert wird.
+2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.3.0.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
+3. Auf einer von Supervisor unterstützten HA-OS-Version den App-Store neu laden. Nodivra Runtime erscheint unter den lokalen Apps. Installieren. Der erste Build lädt offizielle Swift-/Python-Abhängigkeiten und benötigt Zeit und freien Speicher. Die Architektur wird vom Build gewählt.
+4. Runtime starten und **Weboberfläche öffnen** wählen. Dort **Schlüssel generieren** und **Schlüssel speichern & verwenden** anklicken. 64 zufällige Zeichen werden erzeugt und in den HA-App-Optionen gespeichert; ein bisheriger gültiger Schlüssel wird erst nach Bestätigung ersetzt. Der Schlüssel lässt sich verborgen halten und kopieren. Ohne gültigen Schlüssel bleibt die externe Runtime-API gesperrt, die Einrichtung ist erreichbar.
+5. Auf dem Mac Runtime-Adresse `http://homeassistant.local:8668` und denselben Schlüssel eintragen. Lokales HTTP muss ausdrücklich erlaubt werden. Schlüssel und Programme laufen bei HTTP unverschlüsselt über das lokale Netz; Port 8668 nicht öffentlich freigeben. Die aktuelle Runtime terminiert selbst kein TLS.
+6. Dashboard → Testablauf öffnen → lokal simulieren → auf Runtime prüfen → deaktiviert übertragen → Beobachten. Das erste Programm schreibt nur Protokollmeldungen. Noch keine Geräteautomation zur ersten Abnahme verwenden.
 
-The Home Assistant ingress page generates 256-bit random access keys, hides them by default, and can copy and save them directly to the app options. A replacement of an existing valid key requires confirmation. Configuration writes are read back before the runtime uses the new key. The page is accessible only through the Supervisor ingress proxy, never through port 8668. No additional Supervisor manager/admin role is required.
+Die Runtime bekommt HA-Zustände und Dienstzugriff über `homeassistant_api: true` und den vom Supervisor bereitgestellten `SUPERVISOR_TOKEN`. Dieser Token verlässt den Container nicht in Richtung Mac. Verbindung über `ws://supervisor/core/websocket`; kein Docker-Zugriff, Host-Dateisystemzugriff oder privilegierter Modus erforderlich.
 
-Nodivra 0.12.0 checks Home Assistant for available runtime releases and shows this package's changelog. Updates use a new full backup and a persistent progress journal, then verify the installed version and connection. Running programs remain paused after restart. [Changelog](nodivra_runtime/CHANGELOG.md).
+## Updates direkt aus der Mac-App
 
-## First automation
+Nodivra prüft beim Verbinden und danach stündlich die von Supervisor gemeldete verfügbare Runtime-Version. Dashboard → **Updates** lädt zusätzlich die Installationsquellen neu und zeigt den Änderungslog aus Home Assistant. **Update vorbereiten** öffnet den Assistenten. Erst **Mit Sicherung aktualisieren** erstellt einen neuen Auftrag mit Vollsicherung, Versionsprüfung, Update, Start und Verbindungsprüfung. Die angezeigte Zielversion wird festgehalten; wechselt das Angebot währenddessen, wird kein anderes Update stillschweigend installiert. Unklare Schreibausgänge werden zurückgelesen. Programme bleiben nach einem Neustart pausiert. Schlüssel und weitere Optionen bleiben erhalten.
 
-Start with Nodivra's log-only example. Transfers create a disabled revision. Observation mode reads actual Home Assistant states but does not call device actions. Execution must be enabled separately. Fixed service calls, logic gates, entity states, time windows and delays are supported; general templates, blueprints and arbitrary scripts are not supported in this preview.
+Die Runtime-Konfiguration läuft getrennt vom API-Port über HA Ingress (intern 8099, ausschließlich Supervisor-IP 172.30.32.2). CSRF-Schutz, Bestätigung bei Schlüsselersatz, Konfliktprüfung und Rücklesen der gespeicherten Optionen verhindern unbeabsichtigte Änderungen. Es werden keine Supervisor-Manager-/Adminrechte zusätzlich angefordert.
 
-## Recovery
+## Betrieb und Daten
 
-Before installation, keep a full Home Assistant backup and download a copy to another device. The installer verifies backup metadata and size; it does not perform a restore test. Its installation journal contains no access keys. If a request times out, use “Status prüfen & fortsetzen”; do not repeat the installation manually until the server status is known.
+- `/data/runtime.sqlite`: SQLite mit WAL und vollständiger Synchronisierung; Programme, Revisionen, begrenzte Protokolle und Wiederholungskennungen.
+- `/data/backups`: zehn Datenbankstände; Sicherung vor jeder Übertragung. Pro Programm zusätzlich zehn Konfigurationsfassungen.
+- Nach Prozessneustart sind alle Programme pausiert. Bei HA-Verbindungsabbruch pausieren Programme mit HA-Eingängen oder Geräteaktionen; rein virtuelle SPS-Programme können weiterlaufen. Aktivierung erfolgt ausdrücklich mit frischen Eingangswerten. Es gibt noch keine dauerhafte Fortsetzung laufender Timer.
+- Ein einzelner HA-WebSocket abonniert Zustandsänderungen vor dem ersten Gesamtbild. Protokoll 1 verarbeitet Ereignisframes wie bisher. SPS-Programme (Protokoll 2 und 3) werten pro Zyklus genau ein aktuelles Zustandsbild aus; Impulse kürzer als ein Zyklus können dabei unentdeckt bleiben. Überlauf pausiert. Zielintervall: 100 ms, keine garantierte Echtzeit; Dienstantworten können einen Zyklus verzögern.
+- API und Engine begrenzen Nutzlast, Graphgröße, Aktionsrate und Wartezeiten. Fehler oder nicht bestätigte Dienstaufrufe werden nicht automatisch wiederholt.
+- Eine Aktion kann physisch bereits erfolgt sein, bevor die Verbindung abbricht. Konfigurationswiederherstellung macht Geräteaktionen nicht rückgängig.
 
-The runtime stores revision history and SQLite backups in its app data. Stopping the app stops its automations without deleting them. After restart or loss of the Home Assistant connection, programs pause and must be explicitly resumed. Previous automation revisions can be restored from Nodivra. A full HA restore can also revert unrelated changes made since that backup.
+## API v1
 
-## Development checks
+Alle `/api/v1`-Anfragen benötigen `Authorization: Bearer <access_key>`. Browser-Origin-Anfragen werden abgelehnt. Nur `/health` ist öffentlich und enthält keine Programm- oder Zugangsdaten; ein ausgefallener Engine-Prozess ergibt HTTP 503 für den Watchdog.
 
-```sh
-docker build -t nodivra-runtime ./nodivra_runtime
-docker run --rm --entrypoint /opt/nodivra/venv/bin/python \
-  -e NODIVRA_TEST_ENGINE=/usr/local/bin/NodivraEngine \
-  -v "$PWD:/tests:ro" -w /tests nodivra-runtime \
-  -m unittest discover -s tests -v
-```
+| Aufruf | Zweck |
+|---|---|
+| GET `/api/v1/status` | Version, Instanz, HA-Verbindung, Engine und Ausführungszahl |
+| GET `/api/v1/automations` | Programme mit Revision und Zustand |
+| POST `/api/v1/validate` | RuntimePackage gegen gemeinsame Engine prüfen |
+| PUT `/api/v1/automations/{id}` | Paket mit `expectedRevision` und `requestID` deaktiviert speichern |
+| GET `/api/v1/automations/{id}` | Gespeicherten Inhalt zurücklesen |
+| POST `/api/v1/automations/{id}/state` | Pausieren, beobachten oder ausdrücklich ausführen |
+| GET `/api/v1/automations/{id}/revisions` | Frühere Fassungen |
+| GET `/api/v1/live/{id}` | Signale, Restzeiten und offene Aktionen der laufenden Fassung |
+| GET `/api/v1/events` | Begrenztes Ereignisprotokoll |
 
-Tests use local fake Home Assistant services and never operate actual devices. Dependencies are pinned in the package and requirements file. Third-party dependencies retain their own licenses.
+Änderungen sind revisionsgebunden. Identische Wiederholungen mit derselben requestID werden ohne erneutes Schreiben beantwortet; andere Daten unter derselben Kennung ergeben Konflikt. Bei unbekanntem Schreibausgang zuerst zurücklesen. Live-Daten älter als drei Sekunden werden verworfen.
 
-## PLC foundation (protocol 2)
+## Lokale Entwicklung
 
-Digital and analog inputs/outputs, program-local virtual inputs, M/AM markers and contacts, and analog comparisons are supported. Markers publish the previous cycle value and commit simultaneously at cycle end. The runtime samples one process image per cycle (target 100 ms, not hard realtime). Shorter pulses may be missed; service calls can delay cycles. Older protocol-1 programs keep their event-frame behavior. Marker values are not yet retained across restarts. Programs restart paused.
+Python 3.10+ und Swift 6. Runtime-Tests starten ausschließlich eigene HTTP-/WebSocket-Fixtures auf Loopback. `NODIVRA_TEST_ENGINE` auf den gebauten Swift-CLI-Pfad setzen. Für den manuellen Entwicklungsserver sind `NODIVRA_DATA`, `NODIVRA_ACCESS_KEY`, `NODIVRA_ENGINE`, `NODIVRA_HA_BASE`, `NODIVRA_HA_TOKEN`, `NODIVRA_HOST` und `NODIVRA_PORT` konfigurierbar. Testzugangsdaten aus den Fixtures sind keine produktiven Schlüssel. Keine echten Tokens in Skripten ablegen.
 
-Use the macOS dashboard input panel for virtual controls. Live visualization is read-only. Observe mode never sends device actions. Transfers remain disabled until explicitly started. New PLC programs require the matching Nodivra 0.12 editor and Runtime 0.2.
+Quellen: [HA Apps](https://developers.home-assistant.io/docs/apps/), [App-Konfiguration](https://developers.home-assistant.io/docs/apps/configuration/), [Kommunikation](https://developers.home-assistant.io/docs/apps/communication/), [Swift Crypto](https://github.com/apple/swift-crypto).
+
+## SPS und virtuelle Signale (Protokoll 2)
+
+Digitale Ein-/Ausgänge, analoge Ein-/Ausgänge, M-/AM-Merker, Kontakte und Analogvergleiche werden direkt von der gemeinsamen Swift-Engine ausgeführt. Merker werden gleichzeitig am Zyklusende gespeichert und erst im nächsten Zyklus sichtbar. Anfangswert 0, noch keine Remanenz. HA-Attribute werden zusammen mit dem Zustand eingelesen; unbekannte Werte propagieren als unbekannt. Ausgänge senden Aktionen bei Wertänderungen, beim Laden wird kein Ausgang gesendet. Virtuelle Ausgänge senden keine HA-Aktionen. Analoge Lichtausgänge verwenden 0–100 Prozent, number/input_number verwenden set_value. Maximal 30 Aktionen pro Minute und Programm, global 120.
+
+GET `/api/v1/automations/{id}/inputs` liest virtuelle Eingänge eines laufenden Programms. POST `/api/v1/automations/{id}/inputs/{block-id}` setzt mit `expectedRevision` und typisiertem `value` einen solchen Eingang. Reale Entitäten, Merker und fremde Blöcke werden abgewiesen. Werte sind pro Programm getrennt und werden beim Aktivieren zurückgesetzt. Live-GET bleibt rein beobachtend.
+
+## Erweiterte Bausteine (Protokoll 3)
+
+40 neue Funktionen: NAND/NOR und Flankenauswertung, kombinierte und speichernde Verzögerungen, Wischrelais und Impulsfolge, asynchroner Takt und Zufallsverzögerung, Treppen-/Komfortlicht, Jahres-/Astroschaltuhr, Stoppuhr, Zähler/Betriebsstunden/Frequenz, Schwellwert-/Differenzschalter, Analogkomparator/Überwachung/Verstärker, Stromstoßrelais, Schieberegister, Multiplexer, Rampe, PI/PWM, Mathematik/Fehlererkennung, Filter/Max-Min/Mittelwert, Zahlenkonvertierung, Entprellen, Begrenzung und Anlaufimpuls.
+
+Logikbausteine unterstützen zwei bis acht Eingänge und fünf identische Q-Abgänge. Unverbundene Gate-Eingänge sind neutral; verbundene unbekannte Werte bleiben unbekannt. `Wire.output` wählt den Ausgang, alte Dateien ohne dieses Feld verwenden Ausgang 0. Zähler, Betriebsstunden und Frequenz besitzen zusätzlich einen analogen AQ-Ausgang (Port 1).
+
+Der Anlaufimpuls ist im ersten Zyklus nach dem ausdrücklich gestarteten Programm Ein und kann Initialisierungsaktionen auslösen. Alle anderen Wiederanlaufregeln und Aktionsgrenzen bleiben bestehen. Keine Remanenz oder garantierte Echtzeit. Hardwaregebundene LOGO!-Funktionen, VM-Adressierung und Soft-Comfort-Dateien sind nicht implementiert. Einige Sonderfunktionen sind auf das HA-Zyklusmodell reduziert: Zeitabtastung statt Hardwarezählung, jährliches Datumsfenster, parametrische PI-Regelung und numerische Konvertierung ohne VM-Bindung. Meldungen erfolgen zunächst als Protokolleintrag.

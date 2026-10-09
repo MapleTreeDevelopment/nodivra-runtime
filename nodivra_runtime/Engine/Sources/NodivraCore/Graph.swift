@@ -1,11 +1,13 @@
 import Foundation
 
 public enum BlockKind: String, Codable, CaseIterable, Sendable {
+    case function
     case state, stateMatch, numeric, constant, timeWindow, button, and, or, xor, not, onDelay, offDelay, pulse, latch, output
     case haTrigger, haCondition, haAction
     case digitalInput, analogInput, digitalOutput, analogOutput, marker, analogMarker, markerContact, analogContact, analogCompare
     public var label: String {
         switch self {
+        case .function: "Sonderfunktion"
         case .state: "Ein-/Aus-Zustand"; case .stateMatch: "Zustand vergleichen"; case .numeric: "Zahlenvergleich"
         case .timeWindow: "Zeitfenster"; case .constant: "Konstante"; case .button: "Taster / Schalter"; case .and: "UND"; case .or: "ODER"
         case .xor: "Exklusiv ODER"; case .not: "NICHT"; case .onDelay: "Einschaltverzögerung"
@@ -32,6 +34,7 @@ public enum BlockKind: String, Codable, CaseIterable, Sendable {
     public var isEntityInput: Bool { [.state, .stateMatch, .numeric, .button].contains(self) }
     public var icon: String {
         switch self {
+        case .function: "function"
         case .state, .stateMatch: "sensor"; case .numeric: "number"; case .constant: "number.square"; case .timeWindow: "clock"
         case .button: "button.programmable"; case .and: "arrow.triangle.merge"; case .or, .xor: "arrow.triangle.branch"
         case .not: "plus.forwardslash.minus"; case .onDelay, .offDelay: "timer"; case .pulse: "waveform.path"
@@ -79,7 +82,7 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
     public var duration: Double { number("duration", kind == .button ? 0.5 : 5) }
     public var managedButton: Bool { kind == .button && entityID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var momentary: Bool { kind == .button && text("behavior", "momentary") == "momentary" }
-    public var inputLabels: [String] { kind == .latch ? ["Setzen", "Rücksetzen"] : (0..<kind.inputCount).map { kind.isFlow ? "Signal / Start" : "Eingang \($0 + 1)" } }
+    public var inputLabels: [String] { if [.onDelay, .offDelay, .pulse].contains(kind) && flag("resettable") { return ["Trg", "R"] }; if let function, !isGate { return function.pins.map { $0.0 } }; return kind == .latch ? ["Setzen", "Rücksetzen"] : (0..<inputCount).map { kind.isFlow ? "Signal / Start" : "I\($0 + 1)" } }
     public var configuration: ConfigValue { options["configuration"] ?? .object([:]) }
 }
 public struct Wire: Identifiable, Codable, Equatable, Sendable {
@@ -87,7 +90,10 @@ public struct Wire: Identifiable, Codable, Equatable, Sendable {
     public var source: UUID
     public var target: UUID
     public var input: Int
-    public init(source: UUID, target: UUID, input: Int, id: UUID = UUID()) { self.id = id; self.source = source; self.target = target; self.input = input }
+    public var output: Int = 0
+    public init(source: UUID, target: UUID, input: Int, output: Int = 0, id: UUID = UUID()) { self.id = id; self.source = source; self.target = target; self.input = input; self.output = output }
+    enum CodingKeys: String, CodingKey { case id, source, target, input, output }
+    public init(from decoder: Decoder) throws { let c = try decoder.container(keyedBy: CodingKeys.self); id = try c.decode(UUID.self, forKey: .id); source = try c.decode(UUID.self, forKey: .source); target = try c.decode(UUID.self, forKey: .target); input = try c.decode(Int.self, forKey: .input); output = try c.decodeIfPresent(Int.self, forKey: .output) ?? 0 }
 }
 public struct AutomationGraph: Codable, Equatable, Sendable {
     public var formatVersion = 2
@@ -96,7 +102,7 @@ public struct AutomationGraph: Codable, Equatable, Sendable {
     public var blocks: [Block]
     public var wires: [Wire]
     public var importContext: ImportContext?
-    public init(id: UUID = UUID(), title: String, blocks: [Block], wires: [Wire]) { self.id = id; self.title = title; self.blocks = blocks; self.wires = wires; if blocks.contains(where: { $0.kind.isPLC }) { formatVersion = 3 } }
+    public init(id: UUID = UUID(), title: String, blocks: [Block], wires: [Wire]) { self.id = id; self.title = title; self.blocks = blocks; self.wires = wires; if blocks.contains(where: { $0.kind.isPLC }) { formatVersion = 3 }; if usesExtendedPLC { formatVersion = 4 } }
     /// Preserve native event sequences until a signal source/adapter is used.
     public var isFlow: Bool {
         !blocks.isEmpty && blocks.allSatisfy { $0.kind.isFlow } &&

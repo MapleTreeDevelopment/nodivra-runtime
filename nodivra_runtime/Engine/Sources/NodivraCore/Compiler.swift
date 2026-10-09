@@ -106,7 +106,7 @@ public enum GraphCompiler {
             }
             var value: BooleanExpression
             switch b.kind {
-            case .digitalInput, .analogInput, .digitalOutput, .analogOutput, .marker, .analogMarker, .markerContact, .analogContact, .analogCompare:
+            case .function, .digitalInput, .analogInput, .digitalOutput, .analogOutput, .marker, .analogMarker, .markerContact, .analogContact, .analogCompare:
                 throw CompilationError(diagnostics: [.init("SPS-Bausteine benötigen Nodivra Runtime 0.2 oder neuer.", blockID: b.id)])
             case .state: value = .entity(b.entityID); inputs[b.entityID] = b
             case .stateMatch: value = .matches(b.entityID, b.text("expected", "on")); inputs[b.entityID] = b
@@ -125,7 +125,7 @@ public enum GraphCompiler {
             case .xor: value = try .xor(input(0), input(1))
             case .not: value = try .not(input(0))
             case .onDelay, .offDelay, .pulse, .latch:
-                let source = try (0..<b.kind.inputCount).map { try input($0) }
+                let source = try (0..<b.inputCount).map { try input($0) }
                 let signal = try helper(b, .boolean, "signal")
                 let timer = b.kind == .latch ? nil : try helper(b, .timer, "timer")
                 let rule = RuntimeRule(blockID: b.id, kind: b.kind, inputs: source, signalEntity: signal, timerEntity: timer, duration: b.duration, retrigger: b.text("retrigger", "restart") == "restart")

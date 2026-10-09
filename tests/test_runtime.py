@@ -236,11 +236,42 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.runtime.record(r['id'])['enabled'])
         await self.request('GET', 'automations/' + r['id'] + '/inputs')
 
+    async def test_extended_counter_outputs_and_five_gate_ports(self):
+        source = block('digitalInput')
+        counter = block('function', {'function': 'counter', 'on': 1, 'off': 0})
+        gate = block('and', {'inputCount': 5})
+        digital = block('digitalOutput')
+        analog = block('analogOutput')
+        wires = [dict(id=str(uuid.uuid4()), source=a['id'], target=b['id'], input=pin, output=output)
+                 for a,b,pin,output in [(source,counter,0,0),(counter,gate,4,0),(gate,digital,0,4),(counter,analog,0,1)]]
+        p = dict(protocolVersion=3, timeZone='UTC', graph=dict(formatVersion=4, id=str(uuid.uuid4()), title='Extended PLC', blocks=[source,counter,gate,digital,analog], wires=wires))
+        r = await self.upload(p); await self.enable(r)
+        await self.request('POST', 'automations/' + r['id'] + '/inputs/' + source['id'], dict(expectedRevision=r['revision'], value=True))
+        await asyncio.sleep(.3)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertTrue(live['signals'][digital['id'].upper()])
+        self.assertEqual(live['analogSignals'][analog['id'].upper()], 1)
+        self.assertEqual(self.calls, [])
+        self.assertEqual((await self.request('GET', 'automations/' + r['id']))['package']['graph']['wires'][-2]['output'], 4)
+
+    async def test_extended_function_timer_reports_real_remaining(self):
+        source = block('digitalInput')
+        timer = block('function', {'function': 'retentiveOnDelay', 'duration': 2})
+        p = dict(protocolVersion=3, timeZone='UTC', graph=dict(formatVersion=4, id=str(uuid.uuid4()), title='Timer', blocks=[source,timer], wires=[dict(id=str(uuid.uuid4()), source=source['id'], target=timer['id'], input=0)]))
+        r = await self.upload(p); await self.enable(r)
+        await self.request('POST', 'automations/' + r['id'] + '/inputs/' + source['id'], dict(expectedRevision=r['revision'], value=True))
+        await asyncio.sleep(.3)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertGreater(live['remaining'][timer['id'].upper()], 1)
+        self.assertLess(live['remaining'][timer['id'].upper()], 2)
+        self.assertFalse(live['signals'][timer['id'].upper()])
+        self.assertEqual(self.calls, [])
+
     async def test_authentication_and_no_browser_origin(self):
         async with ClientSession() as client:
             async with client.get(f'http://127.0.0.1:{self.port}/api/v1/status') as response: self.assertEqual(response.status,401)
         async with self.client.get(f'http://127.0.0.1:{self.port}/api/v1/status',headers={'Origin':'http://untrusted.test'}) as response: self.assertEqual(response.status,403)
-        self.assertEqual((await self.request('GET','status'))['protocolVersion'],2)
+        self.assertEqual((await self.request('GET','status'))['protocolVersion'],3)
 
     async def test_transfer_disabled_idempotent_and_conflict(self):
         p=package();request_id=str(uuid.uuid4());r=await self.upload(p,request_id=request_id)

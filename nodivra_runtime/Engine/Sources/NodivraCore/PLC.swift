@@ -2,7 +2,7 @@ import Foundation
 
 public enum SignalType: String, Codable, Sendable { case digital, analog }
 public extension BlockKind {
-    var isPLC: Bool { [.digitalInput, .analogInput, .digitalOutput, .analogOutput, .marker, .analogMarker, .markerContact, .analogContact, .analogCompare].contains(self) }
+    var isPLC: Bool { [.function, .digitalInput, .analogInput, .digitalOutput, .analogOutput, .marker, .analogMarker, .markerContact, .analogContact, .analogCompare].contains(self) }
     var isMarker: Bool { self == .marker || self == .analogMarker }
     var isContact: Bool { self == .markerContact || self == .analogContact }
     var isPLCInput: Bool { self == .digitalInput || self == .analogInput }
@@ -17,7 +17,8 @@ public extension Block {
     var initialInput: String { kind == .analogInput ? String(number("initial", 0)) : (flag("initial") ? "on" : "off") }
 }
 public extension AutomationGraph {
-    var usesPLCCycle: Bool { formatVersion == 3 || blocks.contains { $0.kind.isPLC } }
+    var usesExtendedPLC: Bool { blocks.contains { $0.kind == .function || $0.options["inputCount"] != nil || $0.flag("resettable") || $0.options["priority"] != nil } || wires.contains { $0.output != 0 } }
+    var usesPLCCycle: Bool { formatVersion >= 3 || usesExtendedPLC || blocks.contains { $0.kind.isPLC } }
     /// Named markers are scoped to a program. UUIDs are the stable identities.
     func nextMarkerName(analog: Bool) -> String {
         let prefix = analog ? "AM" : "M"

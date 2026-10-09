@@ -13,20 +13,21 @@ public struct BlockDescriptor: Identifiable, Sendable {
     }
 }
 public enum BlockCatalog {
-    public static let categories = ["Eingänge", "Logik", "Zeit & Speicher", "Ausgänge", "HA · Auslöser", "HA · Bedingungen", "HA · Aktionen"]
+    public static let categories = ["Ein- & Ausgänge", "Grundfunktionen", "Zeitfunktionen", "Schaltuhren", "Zähler", "Speicher & Relais", "Analogfunktionen", "Regelung", "HA · Auslöser", "HA · Bedingungen", "HA · Aktionen"]
     private static func flow(_ id: String, _ title: String, _ kind: BlockKind, _ json: String, _ required: [String] = [], _ summary: String = "") -> BlockDescriptor {
         .init(id: id, title: title, category: kind == .haTrigger ? "HA · Auslöser" : kind == .haCondition ? "HA · Bedingungen" : "HA · Aktionen", kind: kind, summary: summary, defaults: try! .parse(json), requiredPaths: required)
     }
     public static let descriptors: [BlockDescriptor] = {
-        var result = BlockKind.allCases.filter { !$0.isFlow }.map { kind in
-            let category = kind.isPLCInput || kind.isContact || kind.isEntityInput || kind == .constant || kind == .timeWindow ? "Eingänge" : kind.isMarker || kind.isMemory ? "Zeit & Speicher" : kind.isPLCOutput || kind == .output ? "Ausgänge" : "Logik"
-            return BlockDescriptor(id: "logic.\(kind.rawValue)", title: kind.label, category: category, kind: kind, summary: "", defaults: .object([:]), requiredPaths: [])
+        var result = BlockKind.allCases.filter { !$0.isFlow && $0 != .function }.map { kind in
+            let category = kind == .timeWindow ? "Schaltuhren" : kind.isMarker || kind.isContact || kind == .latch ? "Speicher & Relais" : kind.isTimed ? "Zeitfunktionen" : kind == .analogCompare ? "Analogfunktionen" : kind.isPLCInput || kind.isContact || kind.isEntityInput || kind == .constant || kind == .timeWindow ? "Ein- & Ausgänge" : kind.isPLCOutput || kind == .output ? "Ein- & Ausgänge" : "Grundfunktionen"
+            return BlockDescriptor(id: "logic.\(kind.rawValue)", title: kind == .timeWindow ? "Wochenschaltuhr / Zeitfenster" : kind.label, category: category, kind: kind, summary: "", defaults: .object([.and, .or, .xor].contains(kind) ? ["inputCount": .number(5)] : [.onDelay, .offDelay, .pulse].contains(kind) ? ["resettable": .bool(true)] : [:]), requiredPaths: [])
         }
+        result += PLCFunction.allCases.map(\.descriptor)
         result += [
             flow("runtime.log", "Protokolleintrag", .haAction, #"{"action":"nodivra.log","data":{"message":"Automation ausgeführt"}}"#, ["data.message"], "Schreibt einen Eintrag in das Runtime-Protokoll. Schaltet keine Geräte."),
-            BlockDescriptor(id: "logic.darkness", title: "Es ist dunkel", category: "Eingänge", kind: .haCondition, summary: "Ein zwischen Sonnenuntergang und Sonnenaufgang. Lässt sich mit allen Logikbausteinen kombinieren.", defaults: .object(["condition": .string("sun"), "after": .string("sunset"), "before": .string("sunrise")]), requiredPaths: []),
-            BlockDescriptor(id: "logic.motion", title: "Bewegung erkannt", category: "Eingänge", kind: .state, summary: "Ein, solange der Bewegungsmelder Bewegung meldet.", defaults: .object([:]), requiredPaths: []),
-            BlockDescriptor(id: "logic.autoOff", title: "Automatisch ausschalten", category: "Zeit & Speicher", kind: .pulse, summary: "Sofort einschalten und nach der Laufzeit automatisch ausschalten. Ein neuer Impuls kann die Zeit neu starten.", defaults: .object(["duration": .number(300)]), requiredPaths: []),
+            BlockDescriptor(id: "logic.darkness", title: "Es ist dunkel", category: "Ein- & Ausgänge", kind: .haCondition, summary: "Ein zwischen Sonnenuntergang und Sonnenaufgang. Lässt sich mit allen Logikbausteinen kombinieren.", defaults: .object(["condition": .string("sun"), "after": .string("sunset"), "before": .string("sunrise")]), requiredPaths: []),
+            BlockDescriptor(id: "logic.motion", title: "Bewegung erkannt", category: "Ein- & Ausgänge", kind: .state, summary: "Ein, solange der Bewegungsmelder Bewegung meldet.", defaults: .object([:]), requiredPaths: []),
+            BlockDescriptor(id: "logic.autoOff", title: "Automatisch ausschalten", category: "Zeitfunktionen", kind: .pulse, summary: "Sofort einschalten und nach der Laufzeit automatisch ausschalten. Ein neuer Impuls kann die Zeit neu starten.", defaults: .object(["duration": .number(300)]), requiredPaths: []),
             flow("trigger.state", "Zustandsänderung", .haTrigger, #"{"trigger":"state","entity_id":"binary_sensor.bewegung","to":"on"}"#, ["entity_id"]),
             flow("trigger.numeric", "Schwellwert überschritten", .haTrigger, #"{"trigger":"numeric_state","entity_id":"sensor.temperatur","above":25}"#, ["entity_id"]),
             flow("trigger.time", "Uhrzeit", .haTrigger, #"{"trigger":"time","at":"18:00:00"}"#, ["at"]),
@@ -97,5 +98,9 @@ public enum BlockCatalog {
         ]
         return result
     }()
+    public static let libraryDescriptors: [BlockDescriptor] = descriptors.filter {
+        // Aliases remain loadable but have a single place in the new library.
+        !["logic.state", "logic.motion", "logic.numeric", "logic.output", "logic.autoOff", "condition.state", "condition.numeric", "condition.time"].contains($0.id)
+    }
     public static func descriptor(for block: Block) -> BlockDescriptor? { descriptors.first { $0.id == block.catalogID } }
 }

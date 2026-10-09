@@ -1,3 +1,13 @@
+# 0.3.0
+
+- 40 neue Grund-/Sonderfunktionen: Zeit-, Kalender-, Zähl-, Speicher-, Analog- und Reglerbausteine sowie Anlaufimpuls, Entprellung und Begrenzung.
+- Logik mit bis zu acht Eingängen und fünf Q-Abgängen; getrennte digitale und analoge Zählerausgänge.
+- Zusätzliche Reset-Pins und wählbarer S/R-Vorrang. Gleiches Verhalten in Simulation und Runtime.
+- Live-Snapshots mit Zahlenwerten und verbleibenden Zeiten der neuen Zeitbausteine.
+- Protokoll 3 / Graphformat 4; ältere Programme bleiben unterstützt. Neue Blöcke benötigen Nodivra 0.13.
+- Programme bleiben nach dem Update pausiert. Timer und Merker sind noch nicht remanent.
+- Erweiterung des Software-Funktionsumfangs; keine vollständige LOGO!-Hardware- oder Dateiformat-Nachbildung.
+
 # 0.2.0
 
 - SPS-Programme mit digitalen und analogen Ein-/Ausgängen.

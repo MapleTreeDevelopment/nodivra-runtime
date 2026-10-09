@@ -21,7 +21,7 @@ public enum GraphValidator {
             func issue(_ message: String) { issues.append(.init(message, blockID: block.id)) }
             if !block.x.isFinite || !block.y.isFinite { issue("Ungültige Blockposition.") }
             if block.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { issue("Bitte eine Bezeichnung eintragen.") }
-            if block.negatedInputs.contains(where: { $0 < 0 || $0 >= block.kind.inputCount }) { issue("Ungültiger negierter Eingang.") }
+            if block.negatedInputs.contains(where: { $0 < 0 || $0 >= block.inputCount }) { issue("Ungültiger negierter Eingang.") }
             if block.kind == .timeWindow && !TimeWindow(block: block).valid { issue("Wähle gültige Uhrzeiten (Minutengenauigkeit), mindestens einen Wochentag und unterschiedliche Grenzen oder Ganztägig.") }
             if block.kind.isTimed && (!block.duration.isFinite || block.duration < 0.1 || block.duration > 86400) { issue("Die Dauer muss zwischen 0,1 Sekunden und 24 Stunden liegen.") }
             if block.kind == .button && !["momentary", "switch"].contains(block.text("behavior", "momentary")) { issue("Ungültiges Tasterverhalten.") }
@@ -51,7 +51,7 @@ public enum GraphValidator {
                 if graph.isFlow && block.negated && block.kind != .haCondition { issue("Nur Bedingungen lassen sich negieren; Ereignisse und Aktionen nicht.") }
                 if graph.isFlow && !block.negatedInputs.isEmpty { issue("Ein Ablaufanschluss ist kein boolesches Signal.") }
             }
-            for pin in 0..<block.kind.inputCount {
+            for pin in 0..<block.inputCount {
                 let incoming = graph.wires.filter { $0.target == block.id && $0.input == pin }
                 let triggerMerge = block.kind.isFlow && !incoming.isEmpty && incoming.allSatisfy { index[$0.source]?.kind == .haTrigger }
                 if incoming.isEmpty && !(block.kind == .haCondition && !graph.isFlow) { issue("\(block.inputLabels[pin]) ist nicht verbunden.") }
@@ -66,7 +66,7 @@ public enum GraphValidator {
         for wire in graph.wires {
             guard let a = index[wire.source], let b = index[wire.target] else { issues.append(.init("Verbindung verweist auf einen fehlenden Block.")); continue }
             if !a.kind.hasOutput { issues.append(.init("Ein Schaltausgang kann kein Signal liefern.", blockID: a.id)) }
-            if wire.input < 0 || wire.input >= b.kind.inputCount { issues.append(.init("Verbindung verwendet einen ungültigen Eingang.", blockID: b.id)) }
+            if wire.input < 0 || wire.input >= b.inputCount { issues.append(.init("Verbindung verwendet einen ungültigen Eingang.", blockID: b.id)) }
         }
         var visiting = Set<UUID>(), visited = Set<UUID>()
         func visit(_ id: UUID) -> Bool {

@@ -28,6 +28,8 @@ public struct RuntimeEngine: Sendable {
     public private(set) var signals: [UUID: Bool] = [:]
     public private(set) var analogSignals: [UUID: Double] = [:]
     public private(set) var cycle: UInt64 = 0
+    private var functions: [UUID: PLCFunctionState] = [:]
+    private var functionRemaining: [UUID: Double] = [:]
     private var markerValues: [UUID: ConfigValue] = [:]
     private var previousAnalog: [UUID: Double] = [:]
     public private(set) var fault: String?
@@ -51,7 +53,7 @@ public struct RuntimeEngine: Sendable {
         for b in package.graph.blocks where b.kind.isMarker { markerValues[b.id] = b.kind == .marker ? .bool(false) : .number(0) }
         _ = evaluate(seed: true)
     }
-    public func remaining(_ id: UUID) -> Double? { deadlines[id].map { max(0, $0 - time) } }
+    public func remaining(_ id: UUID) -> Double? { functionRemaining[id] ?? deadlines[id].map { max(0, $0 - time) } }
     public mutating func step(now: Double, date: Date, states: [String: String]) -> RuntimeSnapshot {
         guard fault == nil else { return snapshot([]) }
         guard now.isFinite, now >= lastNow, now - lastNow <= 60 else {
@@ -69,7 +71,7 @@ public struct RuntimeEngine: Sendable {
         else { fault = "Aktion nicht bestätigt. Die Automation wurde pausiert; es erfolgt keine automatische Wiederholung." }
     }
     public func snapshot(_ commands: [RuntimeCommand] = []) -> RuntimeSnapshot {
-        .init(time: time, signals: Dictionary(uniqueKeysWithValues: signals.map { ($0.key.uuidString, $0.value) }), analogSignals: Dictionary(uniqueKeysWithValues: analogSignals.map { ($0.key.uuidString, $0.value) }), cycle: cycle, remaining: Dictionary(uniqueKeysWithValues: deadlines.map { ($0.key.uuidString, max(0, $0.value - time)) }), pending: pending.keys.map(\.uuidString), commands: commands, fault: fault)
+        .init(time: time, signals: Dictionary(uniqueKeysWithValues: signals.map { ($0.key.uuidString, $0.value) }), analogSignals: Dictionary(uniqueKeysWithValues: analogSignals.map { ($0.key.uuidString, $0.value) }), cycle: cycle, remaining: Dictionary(uniqueKeysWithValues: deadlines.map { ($0.key.uuidString, max(0, $0.value - time)) }).merging(Dictionary(uniqueKeysWithValues: functionRemaining.map { ($0.key.uuidString, $0.value) }), uniquingKeysWith: { _, b in b }), pending: pending.keys.map(\.uuidString), commands: commands, fault: fault)
     }
     private mutating func evaluate(seed: Bool) -> [RuntimeCommand] {
         var commands: [RuntimeCommand] = []
@@ -87,17 +89,21 @@ public struct RuntimeEngine: Sendable {
             func input(_ pin: Int) -> Bool? {
                 guard let w = g.wires.first(where: { $0.target == b.id && $0.input == pin }) else {
                     // LOGO-style unconnected S/R pins are zero in new PLC programs.
-                    return g.usesPLCCycle && b.kind == .latch ? b.negatedInputs.contains(pin) : nil
+                    return g.usesPLCCycle ? b.unusedDigitalInput(pin).map { b.negatedInputs.contains(pin) ? !$0 : $0 } : nil
                 }
                 guard let value = signals[w.source] else { return nil }
                 return b.negatedInputs.contains(pin) ? !value : value
             }
-            func analogInput() -> Double? { g.wires.first { $0.target == b.id && $0.input == 0 }.flatMap { analogSignals[$0.source] } }
+            func analogInput(_ pin: Int = 0) -> Double? { g.wires.first { $0.target == b.id && $0.input == pin }.flatMap { analogSignals[$0.source] } }
             func evaluate(_ expression: BooleanExpression) -> Bool? { expression.available(states) ? expression.evaluate(states, at: date, calendar: calendar) : nil }
             let prior = previous[b.id], incoming = input(0)
             var value: Bool?
             let c = b.configuration.object ?? [:]
             switch b.kind {
+            case .function:
+                var state = functions[b.id] ?? PLCFunctionState()
+                let result = state.evaluate(b, digital: (0..<b.inputCount).map { b.inputType($0) == .digital ? input($0) : nil }, analog: (0..<b.inputCount).map { b.inputType($0) == .analog ? analogInput($0) : nil }, now: time, date: date, calendar: calendar, seed: seed)
+                functions[b.id] = state; value = result.0; analogSignals[b.id] = result.1; functionRemaining[b.id] = result.2
             case .digitalInput:
                 let raw = states[b.inputKey] ?? (b.virtualPLC ? b.initialInput : "unavailable")
                 value = ["on", "true", "1"].contains(raw) ? true : ["off", "false", "0"].contains(raw) ? false : nil
@@ -152,9 +158,15 @@ public struct RuntimeEngine: Sendable {
                 } else { value = current }
                 previous[b.id] = current
             case .and, .or, .xor:
-                if let a = input(0), let z = input(1) { value = b.kind == .and ? a && z : b.kind == .or ? a || z : a != z }
+                let values = (0..<b.inputCount).map(input)
+                if values.allSatisfy({ $0 != nil }) { value = b.kind == .and ? values.allSatisfy { $0 == true } : b.kind == .or ? values.contains(true) : values.filter { $0 == true }.count % 2 == 1 }
             case .not: value = incoming.map { !$0 }
             case .onDelay, .offDelay, .pulse:
+                if b.flag("resettable") && input(1) != false {
+                    deadlines.removeValue(forKey: b.id); memory.removeValue(forKey: b.id)
+                    value = input(1) == true ? false : nil; previous[b.id] = false
+                    break
+                }
                 if let current = incoming {
                     if seed {
                         value = b.kind == .offDelay ? current : false
@@ -180,7 +192,7 @@ public struct RuntimeEngine: Sendable {
                 previous[b.id] = incoming
             case .latch:
                 if let set = input(0), let reset = input(1) {
-                    if !seed { if reset { memory[b.id] = false } else if set { memory[b.id] = true } }
+                    if !seed { if set && b.text("priority", "reset") == "set" { memory[b.id] = true } else if reset { memory[b.id] = false } else if set { memory[b.id] = true } }
                     value = memory[b.id] ?? false
                 }
             case .haCondition:
