@@ -1,7 +1,7 @@
 import Foundation
 
 /// Per-instance state. Shared by local simulation and the Linux engine.
-struct PLCFunctionState: Sendable {
+struct PLCFunctionState: Codable, Sendable {
     var previous: [Bool?] = []
     var lastTime = 0.0
     var value = 0.0
@@ -14,7 +14,7 @@ struct PLCFunctionState: Sendable {
     var count = 0
     var nextSample: Double?
     var random: UInt64 = 0
-    mutating func evaluate(_ b: Block, digital: [Bool?], analog: [Double?], now: Double, date: Date, calendar: Calendar, seed: Bool) -> (Bool?, Double?, Double?) {
+    mutating func evaluate(_ b: Block, digital: [Bool?], analog: [Double?], now: Double, date: Date, calendar: Calendar, seed: Bool, restoring: Bool = false) -> (Bool?, Double?, Double?) {
         guard let f = b.function else { return (nil, nil, nil) }
         let dt = seed ? 0 : max(0, now - lastTime)
         let previousInputs = previous
@@ -39,7 +39,7 @@ struct PLCFunctionState: Sendable {
             deadline = nil; started = nil; nextSample = nil; samples = []; bits = []; count = 0
             return (f.analogOutput ? nil : false, f.analogOutput || f.hasValueOutput ? value : nil, nil)
         }
-        if seed { value = f == .counter ? n("startValue") : f == .ramp ? n("initial") : 0 }
+        if seed && !restoring { value = f == .counter ? n("startValue") : f == .ramp ? n("initial") : 0 }
         var digitalResult: Bool?, analogResult: Double?
         switch f {
         case .valueSelect:
@@ -68,8 +68,8 @@ struct PLCFunctionState: Sendable {
         case .edge: digitalResult = t("edge") == "Fallend" ? falling(0) : t("edge") == "Beide" ? rising(0) || falling(0) : rising(0)
         case .onOffDelay, .debounce, .randomDelay:
             guard let input = d(0) else { deadline = nil; return (nil, nil, nil) }
-            if seed { q = false; target = input; if input { deadline = now + (f == .debounce ? n("duration") : n("onTime")) } }
-            if !seed && (input != target || was(0) == nil) {
+            if seed && !restoring { q = false; target = input; if input { deadline = now + (f == .debounce ? n("duration") : n("onTime")) } }
+            if (!seed || restoring) && (input != target || was(0) == nil) {
                 target = input
                 var delay = f == .debounce ? n("duration") : n(input ? "onTime" : "offTime")
                 if f == .randomDelay {
@@ -152,7 +152,7 @@ struct PLCFunctionState: Sendable {
             digitalResult = q
         case .monitor:
             guard let x = a(0), let enable = d(1) else { return (nil, nil, nil) }
-            if enable && (seed || was(1) != true) { value = x }
+            if enable && ((!restoring && seed) || was(1) != true) { value = x }
             digitalResult = enable && abs(x - value) > n("delta")
         case .amplifier: analogResult = a(0).map { $0 * n("gain") + n("offset") }
         case .toFloat: analogResult = a(0).map { $0.rounded(.towardZero) * n("resolution") }

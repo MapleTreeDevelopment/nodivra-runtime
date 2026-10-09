@@ -513,3 +513,128 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         migrated.db.close()
 
 if __name__=='__main__': unittest.main(verbosity=2)
+
+
+class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp = RuntimeTests.asyncSetUp
+    asyncTearDown = RuntimeTests.asyncTearDown
+    request = RuntimeTests.request
+    upload = RuntimeTests.upload
+    enable = RuntimeTests.enable
+    state = RuntimeTests.state
+    plc_package = RuntimeTests.plc_package
+    async def configure(self, record, retained=True, automatic=True, reset=False, expected=200):
+        return await self.request('POST','automations/'+record['id']+'/recovery',dict(retained=retained,automatic=automatic,reset=reset,expectedRevision=record['revision'],expectedStateVersion=record['stateVersion']),expected)
+
+    async def restart(self):
+        await self.runner.cleanup()
+        self.runtime=server.Runtime(self.directory.name,KEY,ENGINE,f'http://127.0.0.1:{self.ha_port}/api','fixture-ha-token')
+        self.runner=web.AppRunner(self.runtime.app());await self.runner.setup()
+        site=web.TCPSite(self.runner,'127.0.0.1',0);await site.start()
+        self.port=site._server.sockets[0].getsockname()[1]
+        await asyncio.sleep(.3)
+
+    async def wait_running(self, identity):
+        for _ in range(100):
+            if identity in self.runtime.running: return
+            await asyncio.sleep(.03)
+        self.fail(str(self.runtime.record(identity)))
+
+    async def test_retained_virtual_inputs_and_marker_survive_restart(self):
+        p=self.plc_package();r=await self.upload(p);r=await self.configure(r);await self.enable(r)
+        source=p['graph']['blocks'][0]
+        await self.request('POST',f"automations/{r['id']}/inputs/{source['id']}",dict(value=True,expectedRevision=r['revision']))
+        await asyncio.sleep(.3)
+        await self.restart();await self.wait_running(r['id'])
+        result=await self.request('GET',f"automations/{r['id']}/inputs")
+        self.assertTrue(result['values'][source['id']])
+        live=await self.request('GET','live/'+r['id'])
+        self.assertTrue(live['signals'][p['graph']['blocks'][1]['id'].upper()])
+        self.assertEqual(self.runtime.record(r['id'])['mode'],'observe')
+        self.assertEqual(self.calls,[])
+
+    async def test_manual_pause_cancels_restart_and_mode_change_needs_reset(self):
+        r=await self.configure(await self.upload(package()));r=await self.enable(r)
+        r=await self.request('POST','automations/'+r['id']+'/state',dict(enabled=False,expectedRevision=r['revision'],expectedStateVersion=r['stateVersion']))
+        await self.restart();await asyncio.sleep(1.2)
+        r=self.runtime.record(r['id']);self.assertFalse(r['enabled']);self.assertFalse(r['recovery']['pending'])
+        await self.request('POST','automations/'+r['id']+'/state',dict(enabled=True,mode='execute',expectedRevision=r['revision']),409)
+        r=await self.configure(r,reset=True)
+        r=await self.enable(r,'execute');self.assertTrue(r['enabled'])
+
+    async def test_recovery_waits_for_fresh_available_inputs_without_replaying_edge(self):
+        r=await self.configure(await self.upload(package('light.turn_on')));await self.enable(r,'execute')
+        self.current='unavailable'
+        await self.restart();await asyncio.sleep(1.2)
+        self.assertFalse(self.runtime.record(r['id'])['enabled'])
+        await self.state('on');await self.wait_running(r['id']);await asyncio.sleep(.2)
+        self.assertEqual(self.calls,[]) # changed while offline: no artificial rising edge
+        await self.state('off');await self.state('on');self.assertEqual(len(self.calls),1)
+
+    async def test_inflight_crash_marker_prevents_automatic_replay(self):
+        r=await self.configure(await self.upload(package('light.turn_on')));await self.enable(r,'execute')
+        await self.runner.cleanup()
+        import sqlite3
+        with sqlite3.connect(Path(self.directory.name)/'runtime.sqlite') as db:
+            db.execute('UPDATE program_recovery SET blocked=1 WHERE id=?',(r['id'],))
+        self.runtime=server.Runtime(self.directory.name,KEY,ENGINE,f'http://127.0.0.1:{self.ha_port}/api','fixture-ha-token')
+        self.runner=web.AppRunner(self.runtime.app());await self.runner.setup()
+        site=web.TCPSite(self.runner,'127.0.0.1',0);await site.start();self.port=site._server.sockets[0].getsockname()[1]
+        await asyncio.sleep(1.3)
+        self.assertFalse(self.runtime.record(r['id'])['enabled']);self.assertEqual(self.calls,[])
+        await self.request('POST','automations/'+r['id']+'/state',dict(enabled=True,mode='execute',expectedRevision=r['revision']),409)
+
+    async def test_policy_cas_validation_and_transfer_invalidate_checkpoint(self):
+        p=package();r=await self.upload(p)
+        await self.configure(r,retained=False,automatic=True,expected=422)
+        updated=await self.configure(r)
+        await self.configure(r,expected=409)
+        active=await self.enable(updated)
+        await self.configure(active,expected=409)
+        p['graph']['title']='Neue Fassung'
+        r=await self.upload(p,expected=active['revision'])
+        self.assertFalse(r['enabled']);self.assertFalse(r['recovery']['available']);self.assertFalse(r['recovery']['pending'])
+        await self.restart();await asyncio.sleep(1.1)
+        self.assertFalse(self.runtime.record(r['id'])['enabled'])
+
+    async def test_disconnect_auto_resumes_after_new_snapshot(self):
+        r=await self.configure(await self.upload(package('light.turn_on')));await self.enable(r,'execute')
+        for ws in self.sockets: await ws.close()
+        await asyncio.sleep(.3)
+        self.assertFalse(self.runtime.record(r['id'])['enabled'])
+        self.current='on'
+        # HA fixture reconnect uses the actual five-second reconnect path.
+        for _ in range(220):
+            if self.runtime.record(r['id'])['enabled']: break
+            await asyncio.sleep(.03)
+        self.assertTrue(self.runtime.record(r['id'])['enabled']);self.assertEqual(self.calls,[])
+
+    async def test_durable_guard_precedes_external_side_effect_and_survives_failure(self):
+        r=await self.configure(await self.upload(package('light.turn_on')));await self.enable(r,'execute')
+        called=[]
+        async def uncertain(config):
+            called.append(config)
+            self.assertTrue(self.runtime.recovery_info(r['id'])['blocked'])
+            raise TimeoutError('Response lost after possible device action')
+        self.runtime.ha.action=uncertain
+        await self.state('on')
+        self.assertEqual(len(called),1)
+        self.assertTrue(self.runtime.recovery_info(r['id'])['blocked'])
+        await self.restart();await asyncio.sleep(1.2)
+        self.assertFalse(self.runtime.record(r['id'])['enabled']);self.assertEqual(self.calls,[])
+
+    async def test_corrupt_checkpoint_is_not_replaced_by_a_fresh_run(self):
+        r=await self.configure(await self.upload(package()));await self.enable(r)
+        await self.request('POST','automations/'+r['id']+'/state',dict(enabled=False,expectedRevision=r['revision']))
+        self.runtime.db.execute("UPDATE program_recovery SET checkpoint='invalid',requested=1 WHERE id=?",(r['id'],));self.runtime.db.commit()
+        await asyncio.sleep(1.3)
+        self.assertFalse(self.runtime.record(r['id'])['enabled']);self.assertTrue(self.runtime.recovery_info(r['id'])['blocked'])
+        self.assertFalse(self.runtime.recovery_info(r['id'])['pending'])
+
+    async def test_waiting_restart_can_be_cancelled_before_inputs_return(self):
+        r=await self.configure(await self.upload(package()));await self.enable(r)
+        self.current='unavailable';await self.restart();await asyncio.sleep(1.1)
+        waiting=self.runtime.record(r['id']);self.assertTrue(waiting['recovery']['pending'])
+        await self.request('POST','automations/'+r['id']+'/state',dict(enabled=False,expectedRevision=r['revision'],expectedStateVersion=waiting['stateVersion']))
+        await self.state('on');await asyncio.sleep(1.2)
+        self.assertFalse(self.runtime.record(r['id'])['enabled']);self.assertFalse(self.runtime.recovery_info(r['id'])['pending'])

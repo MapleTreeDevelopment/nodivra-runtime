@@ -16,7 +16,7 @@ Die Bibliothek gliedert sich in aufklappbare Gruppen: Ein-/Ausgänge, Grundfunkt
 
 UND, NAND, ODER, NOR, XOR, NICHT, UND/NAND mit Flankenauswertung und freier Flankenimpuls (steigend/fallend/beide). XOR bedeutet bei mehr als zwei Eingängen ungerade Anzahl aktiver Eingänge.
 
-Digitale/analoge Eingänge können virtuelle Werte oder HA-Entitäten/Attribute verwenden. Digitale/analoge Ausgänge können virtuell oder real zugeordnet werden. M-/AM-Merker und Kontakte übertragen Werte im folgenden Zyklus. Anlaufimpuls liefert genau im ersten Zyklus nach bewusstem Start Ein; damit angeschlossene Aktionen können beim Start ausgelöst werden. Noch keine Remanenz.
+Digitale/analoge Eingänge können virtuelle Werte oder HA-Entitäten/Attribute verwenden. Digitale/analoge Ausgänge können virtuell oder real zugeordnet werden. M-/AM-Merker und Kontakte übertragen Werte im folgenden Zyklus. Anlaufimpuls liefert genau im ersten Zyklus nach bewusstem Start Ein; damit angeschlossene Aktionen können beim Start ausgelöst werden. Optionale Remanenz seit Runtime 0.7; siehe [Neustart & Speicher](RESTART-AND-MEMORY.md).
 
 ## Zuordnung der 38 Sonderfunktionen
 
@@ -69,7 +69,7 @@ Alle neuen Funktionen laufen in derselben Swift-Engine auf dem Mac und in der Ru
 
 R bedeutet Rücksetzen. Beim RS/SR- und Stromstoßrelais ist der Vorrang wählbar; bei anderen Funktionen hat Reset Vorrang. Unbeschaltete digitale Sonderfunktionspins sind Aus, optionale En-Pins von Überwachung/PWM/Multiplexer sind Ein. Nicht vorhandene analoge Pflichtanschlüsse werden diagnostiziert. Zahlen-/Auswahlwerte werden vor Ausführung geprüft.
 
-Nach Neustart bleiben Programme pausiert. Merker, Register, Zeit- und Zählstände werden beim bewussten Start neu initialisiert. Noch offen: Remanenz, programmübergreifende Merker, weitere Parameterreferenzen außerhalb der drei grundlegenden Zeitbausteine, Hardware-Spezialmerker, VM/S7/Modbus-Anbindung, Soft-Comfort-Dateiformate, wiederverwendbare Unterprogramme und der oben ausgewiesene zusätzliche Optionsumfang.
+Seit Runtime 0.7 können Merker, Register, Zeit- und Zählstände erhalten und optional fortgesetzt werden. Ohne Remanenz bleiben Programme nach Neustart pausiert und werden neu initialisiert. Noch offen: programmübergreifende Merker, weitere Parameterreferenzen außerhalb der drei grundlegenden Zeitbausteine, Hardware-Spezialmerker, VM/S7/Modbus-Anbindung, Soft-Comfort-Dateiformate, wiederverwendbare Unterprogramme und der oben ausgewiesene zusätzliche Optionsumfang.
 
 Erweiterte Programme verwenden Graphformat 4 / Runtime-Protokoll 3. Ältere Formate 2/3 und Protokolle 1/2 bleiben unterstützt. Eine ältere Runtime wird vor Transfer neuer Funktionen abgewiesen. Neue Dokumente nicht mit einer älteren App überschreiben; vorherige Projektdateien und unveränderte lokale Entwürfe bleiben gesichert.
 

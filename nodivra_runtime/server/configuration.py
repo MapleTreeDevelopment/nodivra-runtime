@@ -56,6 +56,7 @@ class RuntimeConfiguration:
         app.router.add_get("/status", self.status)
         app.router.add_get("/dashboard", self.dashboard)
         app.router.add_post("/automations/{id}/state", self.program_state)
+        app.router.add_post("/automations/{id}/recovery", self.program_recovery)
         app.router.add_post("/generate", self.generate)
         app.router.add_post("/apply", self.apply)
         return app
@@ -95,6 +96,11 @@ class RuntimeConfiguration:
             return web.json_response({"error": "Bitte das Aktivieren mit Geräteaktionen bestätigen."}, status=409)
         # The Mac API and ingress share the same locks, validation and lifecycle.
         response = await self.runtime.change_state(identity, data)
+        return web.json_response({"updated": True}) if response.status == 200 else response
+
+    async def program_recovery(self, request):
+        identity = str(uuid.UUID(request.match_info["id"]))
+        response = await self.runtime.change_recovery(identity, await request.json())
         return web.json_response({"updated": True}) if response.status == 200 else response
 
     async def generate(self, request):

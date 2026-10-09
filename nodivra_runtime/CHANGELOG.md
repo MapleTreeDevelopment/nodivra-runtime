@@ -1,3 +1,12 @@
+# 0.7.0
+
+- „Neustart & Speicher“ je Automation: optionale Remanenz für Merker, Relais, Zähler, Funktionszustände, virtuelle Eingänge und laufende Timer.
+- Optional automatisch fortsetzen nach Runtime-Neustart oder HA-Verbindungsabbruch; erst nach frischem Zustandsabgleich, im zuvor freigegebenen Modus. Standard bleibt deaktiviert.
+- Timer behalten ihre Restzeit; Unterbrechungszeit wird nicht mitgezählt. Keine nachgeholten Eingangsflanken.
+- Dauerhafte Sperre vor externen Aktionen schützt vor Wiederholung bei unklarer Bestätigung. Gespeicherter Zustand kann nach Prüfung zurückgesetzt werden.
+- Einstellungen direkt im HA-Dashboard und in Nodivra 0.16. Ältere Mac-Apps bleiben für bisherige Funktionen kompatibel.
+- Sicherung vor additiver Datenbankmigration und vor Änderungen an der Neustartregel. Neue Programmfassungen verwerfen alte Laufzustände und bleiben deaktiviert.
+
 # 0.6.1
 
 - „In Seitenleiste anzeigen“ wird ausschließlich in den von Home Assistant bereitgestellten App-Einstellungen konfiguriert: Einstellungen → Apps → Nodivra Runtime.

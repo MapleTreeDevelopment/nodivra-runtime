@@ -10,6 +10,7 @@ struct Request: Decodable {
     var date: Double?
     var commandID: UUID?
     var success: Bool?
+    var checkpoint: RuntimeCheckpoint?
 }
 var engines: [String: RuntimeEngine] = [:]
 let encoder = JSONEncoder()
@@ -24,7 +25,13 @@ while let line = readLine() {
             emit(RuntimeCompiler.validate(package))
         case "load":
             guard let package = r.package, let id = r.id, engines.count < 100 || engines[id] != nil else { throw CLIError.invalid }
-            engines[id] = try RuntimeEngine(package: package, states: r.states ?? [:], date: Date(timeIntervalSince1970: r.date ?? Date().timeIntervalSince1970)); emit(engines[id]!.snapshot())
+            let date = Date(timeIntervalSince1970: r.date ?? Date().timeIntervalSince1970)
+            if let saved = r.checkpoint { engines[id] = try RuntimeEngine(package: package, checkpoint: saved, states: r.states ?? [:], date: date) }
+            else { engines[id] = try RuntimeEngine(package: package, states: r.states ?? [:], date: date) }
+            emit(engines[id]!.snapshot())
+        case "checkpoint":
+            guard let id = r.id, let engine = engines[id] else { throw CLIError.invalid }
+            emit(try engine.checkpoint())
         case "step":
             guard let id = r.id, var engine = engines[id], let now = r.now, let date = r.date else { throw CLIError.invalid }
             let result = engine.step(now: now, date: Date(timeIntervalSince1970: date), states: r.states ?? [:]); engines[id] = engine; emit(result)

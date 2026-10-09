@@ -85,7 +85,7 @@ class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_non_admin_cannot_read_generate_or_replace_keys(self):
         self.runtime.ha.is_admin.return_value = False
-        for path in ['/status', '/dashboard', '/generate', '/apply', '/automations/00000000-0000-0000-0000-000000000001/state']:
+        for path in ['/status', '/dashboard', '/generate', '/apply', '/automations/00000000-0000-0000-0000-000000000001/state', '/automations/00000000-0000-0000-0000-000000000001/recovery']:
             response = await (self.client.get(path) if path in ['/status', '/dashboard'] else self.client.post(path, json=self.payload(), headers=self.headers))
             self.assertEqual(response.status, 403)
         self.assertEqual(self.writes, 0)
@@ -116,3 +116,12 @@ class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         result = await response.json()
         self.assertIsNone(result['addon']); self.assertEqual(result['version'], '0.6.1')
+
+    async def test_recovery_uses_shared_validator_without_exposing_checkpoint(self):
+        self.runtime.change_recovery = AsyncMock(return_value=web.json_response({'checkpoint':'private'}))
+        path='/automations/00000000-0000-0000-0000-000000000001/recovery'
+        data={'retained':True,'automatic':True,'reset':False,'expectedRevision':'fixture','expectedStateVersion':2}
+        self.assertEqual((await self.client.post(path,json=data)).status,403)
+        response=await self.client.post(path,json=data,headers=self.headers)
+        self.assertEqual(await response.json(),{'updated':True})
+        self.runtime.change_recovery.assert_awaited_once_with('00000000-0000-0000-0000-000000000001',data)

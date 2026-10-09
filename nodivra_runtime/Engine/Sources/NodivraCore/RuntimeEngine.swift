@@ -57,6 +57,33 @@ public struct RuntimeEngine: Sendable {
         for b in package.graph.blocks where b.kind.isMarker { markerValues[b.id] = b.kind == .marker ? .bool(false) : .number(0) }
         _ = evaluate(seed: true)
     }
+    /// Capture only settled boundaries. An unacknowledged action or an unconsumed
+    /// completion pulse requires review after a crash, never an automatic replay.
+    public func checkpoint() throws -> RuntimeCheckpoint {
+        guard fault == nil, pending.isEmpty, completions.values.allSatisfy({ $0 <= time }) else {
+            throw CompilationError(diagnostics: [.init("Der Ablauf hat noch keine sichere Speichergrenze erreicht.")])
+        }
+        return .init(version: 1, package: package, time: time, cycle: cycle, functions: functions,
+                     markers: markerValues, previous: previous, previousAnalog: previousAnalog,
+                     deadlines: deadlines, memory: memory, followConfigurations: followConfigurations,
+                     followSignals: followSignals, actionTimes: actionTimes)
+    }
+    public init(package: RuntimePackage, checkpoint: RuntimeCheckpoint, states: [String: String], date: Date) throws {
+        guard checkpoint.version == 1, checkpoint.package == package, checkpoint.time.isFinite, checkpoint.time >= 0 else {
+            throw CompilationError(diagnostics: [.init("Der gespeicherte Zustand passt nicht zu dieser Programmfassung.")])
+        }
+        try self.init(package: package, states: states, date: date)
+        time = checkpoint.time; lastNow = time; cycle = checkpoint.cycle
+        functions = checkpoint.functions; markerValues = checkpoint.markers
+        previous = checkpoint.previous; previousAnalog = checkpoint.previousAnalog
+        deadlines = checkpoint.deadlines; memory = checkpoint.memory
+        followConfigurations = checkpoint.followConfigurations; followSignals = checkpoint.followSignals
+        actionTimes = checkpoint.actionTimes
+        // Reconcile current inputs without inventing edges during the interruption.
+        // Timers use logical time, so downtime never consumes their remaining time.
+        _ = evaluate(seed: true, restoring: true)
+        lastStates = states
+    }
     public func remaining(_ id: UUID) -> Double? { functionRemaining[id] ?? deadlines[id].map { max(0, $0 - time) } }
     public mutating func step(now: Double, date: Date, states: [String: String]) -> RuntimeSnapshot {
         guard fault == nil else { return snapshot([]) }
@@ -77,7 +104,7 @@ public struct RuntimeEngine: Sendable {
     public func snapshot(_ commands: [RuntimeCommand] = []) -> RuntimeSnapshot {
         .init(time: time, signals: Dictionary(uniqueKeysWithValues: signals.map { ($0.key.uuidString, $0.value) }), analogSignals: Dictionary(uniqueKeysWithValues: analogSignals.map { ($0.key.uuidString, $0.value) }), parameterSignals: Dictionary(uniqueKeysWithValues: parameterSignals.map { ($0.key.uuidString, $0.value) }), cycle: cycle, remaining: Dictionary(uniqueKeysWithValues: deadlines.map { ($0.key.uuidString, max(0, $0.value - time)) }).merging(Dictionary(uniqueKeysWithValues: functionRemaining.map { ($0.key.uuidString, $0.value) }), uniquingKeysWith: { _, b in b }), pending: pending.keys.map(\.uuidString), commands: commands, fault: fault)
     }
-    private mutating func evaluate(seed: Bool) -> [RuntimeCommand] {
+    private mutating func evaluate(seed: Bool, restoring: Bool = false) -> [RuntimeCommand] {
         var commands: [RuntimeCommand] = []
         let g = package.graph
         // Publish the process image before evaluating any combinational block. Contacts
@@ -123,7 +150,7 @@ public struct RuntimeEngine: Sendable {
                     break
                 }
                 var state = functions[b.id] ?? PLCFunctionState()
-                let result = state.evaluate(b, digital: (0..<b.inputCount).map { b.inputType($0) == .digital ? input($0) : nil }, analog: (0..<b.inputCount).map { b.inputType($0) == .analog ? analogInput($0) : nil }, now: time, date: date, calendar: calendar, seed: seed)
+                let result = state.evaluate(b, digital: (0..<b.inputCount).map { b.inputType($0) == .digital ? input($0) : nil }, analog: (0..<b.inputCount).map { b.inputType($0) == .analog ? analogInput($0) : nil }, now: time, date: date, calendar: calendar, seed: seed, restoring: restoring)
                 functions[b.id] = state; value = result.0; analogSignals[b.id] = result.1; functionRemaining[b.id] = result.2
             case .digitalInput:
                 let raw = states[b.inputKey] ?? (b.virtualPLC ? b.initialInput : "unavailable")
@@ -160,9 +187,9 @@ public struct RuntimeEngine: Sendable {
                     let command = RuntimeCommand(blockID: b.id, configuration: .object(["action": .string(action), "target": .object(["entity_id": .string(b.entityID)]), "data": .object(data)]), time: time)
                     commands.append(command); pending[b.id] = command; actionTimes.append(time)
                 }
-                previous[b.id] = value
+                if !restoring { previous[b.id] = value }
                 // Accumulate small analog changes against the last sent value.
-                if seed || changed || n == nil || previousAnalog[b.id] == nil { previousAnalog[b.id] = n }
+                if !restoring && (seed || changed || n == nil || previousAnalog[b.id] == nil) { previousAnalog[b.id] = n }
             case .marker, .analogMarker, .markerContact, .analogContact: break
             case .state: value = evaluate(.entity(b.entityID))
             case .stateMatch: value = evaluate(.matches(b.entityID, b.text("expected", "on")))
@@ -203,7 +230,7 @@ public struct RuntimeEngine: Sendable {
                 }
                 if let current = incoming {
                     if seed {
-                        value = b.kind == .offDelay ? current : false
+                        value = restoring ? (b.kind == .onDelay ? (memory[b.id] ?? false) : (b.kind == .offDelay && current) || (deadlines[b.id].map { $0 > time } ?? false)) : b.kind == .offDelay ? current : false
                     } else {
                         switch b.kind {
                         case .onDelay:
@@ -265,7 +292,7 @@ public struct RuntimeEngine: Sendable {
                 if b.hasActionParameters && behavior == "follow" {
                     // Coalesce parameter changes while a service call is pending. The digital
                     // desired state is kept separately, so an OFF edge is never lost.
-                    if seed { followSignals[b.id] = signal }
+                    if seed && !restoring { followSignals[b.id] = signal }
                     let changedState = signal != nil && followSignals[b.id] != nil && signal != followSignals[b.id]
                     let ownsOn = followConfigurations[b.id] != nil && followSignals[b.id] == true
                     if !seed && pending[b.id] == nil && c["enabled"]?.bool != false && (changedState || signal == true && ownsOn) {
@@ -294,7 +321,7 @@ public struct RuntimeEngine: Sendable {
                     break
                 }
                 let changed = (behavior != "falling" && rising) || (behavior != "rising" && falling)
-                previous[b.id] = signal
+                if !restoring || behavior != "follow" { previous[b.id] = signal }
                 if !seed && changed && c["enabled"]?.bool != false {
                     if pending[b.id] != nil || deadlines[b.id] != nil {
                         fault = "\(b.title): Neuer Start während einer laufenden Aktion. Die Automation wurde angehalten."
@@ -343,4 +370,22 @@ public struct RuntimeEngine: Sendable {
         }
         return commands
     }
+}
+
+/// Versioned, internal engine state. The server additionally binds it to revision,
+/// execution mode and a durable action-in-flight guard. Not a graph-editing format.
+public struct RuntimeCheckpoint: Codable, Sendable {
+    var version: Int
+    var package: RuntimePackage
+    public var time: Double
+    var cycle: UInt64
+    var functions: [UUID: PLCFunctionState]
+    var markers: [UUID: ConfigValue]
+    var previous: [UUID: Bool]
+    var previousAnalog: [UUID: Double]
+    var deadlines: [UUID: Double]
+    var memory: [UUID: Bool]
+    var followConfigurations: [UUID: ConfigValue]
+    var followSignals: [UUID: Bool]
+    var actionTimes: [Double]
 }
