@@ -86,9 +86,10 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
     public var managedButton: Bool { kind == .button && entityID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var momentary: Bool { kind == .button && text("behavior", "momentary") == "momentary" }
     public var inputLabels: [String] {
+        if hasActionParameters { return [SignalBridge.actionBehavior(self) == "follow" ? "Ein / Aus" : "Start"] + actionParameters.map(\.label) }
         if variableDuration { return ["Trg", "R", "T · Sekunden"] }
         if hasTimerReset { return ["Trg", "R"] }
-        if function == .valueSelect { return (0..<inputCount).map { "I\($0 + 1) · \(selectionDescription(selectionValue($0)))" } }
+        if function == .valueSelect { return (0..<inputCount).map { "I\($0 + 1) · \(selectionType == .analog ? selectionDescription(selectionValue($0)) : HAConfiguration.compact(selectedValue("value\($0 + 1)")))" } }
         if let function, !isGate { return function.pins.map { $0.0 } }
         return kind == .latch ? ["Setzen", "Rücksetzen"] : (0..<inputCount).map { kind.isFlow ? "Signal / Start" : "I\($0 + 1)" }
     }
@@ -113,10 +114,10 @@ public struct AutomationGraph: Codable, Equatable, Sendable {
     public var blocks: [Block]
     public var wires: [Wire]
     public var importContext: ImportContext?
-    public init(id: UUID = UUID(), title: String, blocks: [Block], wires: [Wire]) { self.id = id; self.title = title; self.blocks = blocks; self.wires = wires; if blocks.contains(where: { $0.kind.isPLC }) { formatVersion = 3 }; if usesExtendedPLC { formatVersion = 4 }; if usesVariableParameters { formatVersion = 5 } }
+    public init(id: UUID = UUID(), title: String, blocks: [Block], wires: [Wire]) { self.id = id; self.title = title; self.blocks = blocks; self.wires = wires; if blocks.contains(where: { $0.kind.isPLC }) { formatVersion = 3 }; if usesExtendedPLC { formatVersion = 4 }; if usesVariableParameters { formatVersion = 5 }; if usesActionParameters { formatVersion = 6 } }
     /// Preserve native event sequences until a signal source/adapter is used.
     public var isFlow: Bool {
-        !blocks.isEmpty && blocks.allSatisfy { $0.kind.isFlow } &&
+        !usesActionParameters && !blocks.isEmpty && blocks.allSatisfy { $0.kind.isFlow } &&
         !blocks.contains { $0.text("signalBehavior") == "state" || $0.text("actionBehavior") != "" } &&
         blocks.filter { $0.kind == .haCondition }.allSatisfy { block in wires.contains { $0.target == block.id } }
     }

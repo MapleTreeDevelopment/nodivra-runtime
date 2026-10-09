@@ -5,7 +5,7 @@ public struct RuntimePackage: Codable, Equatable, Sendable {
     public var protocolVersion: Int = 1
     public var graph: AutomationGraph
     public var timeZone: String
-    public init(graph: AutomationGraph, timeZone: String = TimeZone.current.identifier) { self.graph = graph; self.timeZone = timeZone; protocolVersion = graph.usesVariableParameters ? 4 : graph.usesExtendedPLC ? 3 : graph.usesPLCCycle ? 2 : 1 }
+    public init(graph: AutomationGraph, timeZone: String = TimeZone.current.identifier) { self.graph = graph; self.timeZone = timeZone; protocolVersion = graph.usesActionParameters ? 5 : graph.usesVariableParameters ? 4 : graph.usesExtendedPLC ? 3 : graph.usesPLCCycle ? 2 : 1 }
 }
 public struct RuntimeIssue: Codable, Identifiable, Equatable, Sendable {
     public var blockID: UUID?
@@ -20,13 +20,13 @@ public struct RuntimeValidation: Codable, Sendable {
     public var valid: Bool { issues.isEmpty }
 }
 public enum RuntimeCompiler {
-    public static let version = "0.4.0"
-    public static let catalogIDs: Set<String> = Set(["logic.digitalInput", "logic.analogInput", "logic.digitalOutput", "logic.analogOutput", "logic.marker", "logic.analogMarker", "logic.markerContact", "logic.analogContact", "logic.analogCompare", "logic.state", "logic.stateMatch", "logic.numeric", "logic.constant", "logic.timeWindow", "logic.button", "logic.and", "logic.or", "logic.xor", "logic.not", "logic.onDelay", "logic.offDelay", "logic.pulse", "logic.latch", "logic.output", "logic.darkness", "logic.motion", "logic.autoOff", "trigger.state", "trigger.time", "trigger.pattern", "condition.state", "condition.numeric", "condition.time", "action.service", "action.delay", "runtime.log"]).union(PLCFunction.allCases.map { "plc." + $0.rawValue })
+    public static let version = "0.5.0"
+    public static let catalogIDs: Set<String> = Set(["logic.digitalInput", "logic.analogInput", "logic.digitalOutput", "logic.analogOutput", "logic.marker", "logic.analogMarker", "logic.markerContact", "logic.analogContact", "logic.analogCompare", "logic.state", "logic.stateMatch", "logic.numeric", "logic.constant", "logic.timeWindow", "logic.button", "logic.and", "logic.or", "logic.xor", "logic.not", "logic.onDelay", "logic.offDelay", "logic.pulse", "logic.latch", "logic.output", "logic.darkness", "logic.motion", "logic.autoOff", "trigger.state", "trigger.time", "trigger.pattern", "condition.state", "condition.numeric", "condition.time", "action.service", "action.light", "action.delay", "runtime.log"]).union(PLCFunction.allCases.map { "plc." + $0.rawValue })
     public static func validate(_ package: RuntimePackage) -> RuntimeValidation {
         let g = package.graph
         var issues: [RuntimeIssue] = []
         func fail(_ text: String, _ b: Block? = nil) { issues.append(.init(text, blockID: b?.id)) }
-        if ![1, 2, 3, 4].contains(package.protocolVersion) || ![2, 3, 4, 5].contains(g.formatVersion) || (g.usesPLCCycle && package.protocolVersion < 2) || (g.usesExtendedPLC && package.protocolVersion < 3) || (g.usesVariableParameters && package.protocolVersion < 4) { fail("Diese Programmversion wird von der Runtime nicht unterstützt.") }
+        if ![1, 2, 3, 4, 5].contains(package.protocolVersion) || ![2, 3, 4, 5, 6].contains(g.formatVersion) || (g.usesPLCCycle && package.protocolVersion < 2) || (g.usesExtendedPLC && package.protocolVersion < 3) || (g.usesVariableParameters && package.protocolVersion < 4) || (g.usesActionParameters && package.protocolVersion < 5) { fail("Diese Programmversion wird von der Runtime nicht unterstützt.") }
         if TimeZone(identifier: package.timeZone) == nil { fail("Eine gültige Zeitzone ist erforderlich.") }
         if g.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { fail("Gib der Automation einen Namen.") }
         if g.blocks.isEmpty || g.blocks.count > 150 || g.wires.count > 400 { fail("Ein Programm benötigt 1 bis 150 Bausteine und höchstens 400 Verbindungen.") }
@@ -37,7 +37,7 @@ public enum RuntimeCompiler {
         let blocks = Dictionary(uniqueKeysWithValues: g.blocks.map { ($0.id, $0) })
         for w in g.wires {
             guard let a = blocks[w.source], let b = blocks[w.target], a.kind.hasOutput, (w.source != w.target || b.kind.isMarker), (0..<b.inputCount).contains(w.input), (0..<a.outputCount).contains(w.output) else { fail("Eine Verbindung hat keinen gültigen Anschluss."); continue }
-            if a.outputType(w.output) != b.inputType(w.input) { fail("Ein/Aus und Zahlenwerte benötigen passende Anschlüsse. Verwende für Zahlen einen Analogvergleich.", b) }
+            if a.outputType(w.output) != b.inputType(w.input) { fail("Die Datentypen der Anschlüsse passen nicht zusammen. Ein/Aus, Zahlen, Text, Listen und Objekte benötigen jeweils einen passenden Eingang.", b) }
         }
         if ordered(g).count != g.blocks.count { fail("Eine Rückführung benötigt einen Merker. Eine Schleife ohne Zyklusspeicher ist nicht ausführbar.") }
         var inputs = Set<String>(), actions = 0
@@ -49,12 +49,19 @@ public enum RuntimeCompiler {
             if b.kind == .function {
                 if let f = b.function {
                     for parameter in f.parameters {
+                        if f == .valueSelect && b.typedSelection && parameter.key != "valueUnit" { continue }
                         let value = b.options[parameter.key] ?? parameter.initial
                         if let range = parameter.range {
                             if value.number.map({ $0.isFinite && range.contains($0) }) != true { fail("\(parameter.label): Wähle einen Wert zwischen \(range.lowerBound) und \(range.upperBound).", b) }
                         } else if value.string == nil || !parameter.choices.isEmpty && !parameter.choices.contains(value.string ?? "") { fail("Wähle einen gültigen Wert für \(parameter.label).", b) }
                     }
                     for key in ["count", "length", "tap", "samples", "startValue"] where b.options[key] != nil { if b.number(key).rounded() != b.number(key) { fail("\(key) benötigt eine ganze Zahl.", b) } }
+                    if f == .valueSelect && b.typedSelection {
+                        for key in ["defaultValue"] + (1...b.inputCount).map({ "value\($0)" }) {
+                            let value = b.selectedValue(key)
+                            if !b.selectionType.accepts(value) || value.json.utf8.count > 65536 || b.text("valueUnit") == "integer" && value.number.map({ $0.rounded() == $0 && abs($0) <= 1e9 }) != true { fail("\(key): Wähle einen gültigen Wert vom Typ \(b.selectionType.label).", b) }
+                        }
+                    }
                     if f == .valueSelect && b.selectionUsesTime {
                         for key in ["defaultValue"] + (1...b.inputCount).map({ "value\($0)" }) {
                             if !(0.1...86400).contains(b.number(key, key == "defaultValue" ? 300 : 120)) { fail("Zeitwerte müssen zwischen 0,1 Sekunden und 24 Stunden liegen.", b) }
@@ -93,7 +100,7 @@ public enum RuntimeCompiler {
             case .output: allowedOptions = ["behavior"]
             case .haTrigger: allowedOptions = ["configuration", "signalBehavior", "signalDuration", "configurationError"]
             case .haCondition: allowedOptions = ["configuration", "configurationError"]
-            case .haAction: allowedOptions = ["configuration", "actionBehavior", "offConfiguration", "configurationError"]
+            case .haAction: allowedOptions = ["configuration", "actionBehavior", "offConfiguration", "configurationError", "parameterBindings"]
             default: allowedOptions = []
             }
             if !Set(b.options.keys).isSubset(of: allowedOptions) { fail("Nicht unterstützte Bausteinoptionen: " + Set(b.options.keys).subtracting(allowedOptions).sorted().joined(separator: ", "), b) }
@@ -136,7 +143,7 @@ public enum RuntimeCompiler {
                 actions += 1
                 if !["light", "switch", "fan", "input_boolean"].contains(b.entityID.components(separatedBy: ".").first ?? "") { fail("Der Schaltausgang unterstützt Licht, Schalter, Lüfter und Ein/Aus-Helfer.", b) }
             }
-            if b.outputType == .analog && b.negated || b.negatedInputs.contains(where: { b.inputType($0) == .analog }) { fail("Zahlenanschlüsse können nicht logisch negiert werden.", b) }
+            if b.outputType != .digital && b.negated || b.negatedInputs.contains(where: { b.inputType($0) != .digital }) { fail("Nur Ein/Aus-Anschlüsse können logisch negiert werden.", b) }
             if b.kind.isContact {
                 guard let id = b.markerID, let marker = blocks[id], marker.kind.isMarker, marker.kind.outputType == b.kind.outputType else { fail("Wähle einen passenden Merker dieses Programms.", b); continue }
             }
@@ -191,11 +198,12 @@ public enum RuntimeCompiler {
                 if !(0.1...10).contains(b.number("signalDuration", 0.5)) { fail("Die Ereignisimpulsdauer muss zwischen 0,1 und 10 Sekunden liegen.", b) }
             }
             if b.kind == .haAction {
+                for error in b.parameterErrors { fail(error, b) }
                 let c = b.configuration.object ?? [:]
                 if let delay = c["delay"] {
                     if duration(delay) == nil || !Set(c.keys).isSubset(of: ["delay", "alias", "enabled"]) { fail("Warten benötigt eine feste Dauer von 0,1 Sekunden bis 24 Stunden.", b) }
                 } else {
-                    if !validAction(b.configuration) { fail("Wähle eine Aktion mit festen Parametern. Templates, Ablaufvariablen und verschachtelte Aktionen sind noch nicht unterstützt.", b) }
+                    if !validAction(b.configuration) { fail("Wähle eine Aktion mit festen oder verknüpften Parametern. Templates, Ablaufvariablen und verschachtelte Aktionen sind noch nicht unterstützt.", b) }
                     if service(b.configuration) != "nodivra.log" { actions += 1 }
                 }
                 let behavior = SignalBridge.resolvedActionBehavior(b, in: g)

@@ -61,6 +61,7 @@ public struct AutomationPlan: Sendable {
 
 public enum GraphCompiler {
     public static func compile(_ graph: AutomationGraph, helperBindings: [UUID: String] = [:]) throws -> AutomationPlan {
+        if graph.usesActionParameters { throw CompilationError(diagnostics: [.init("Verknüpfte Aktionsparameter benötigen Nodivra Runtime 0.5 oder neuer.")]) }
         let issues = GraphValidator.validate(graph)
         guard issues.isEmpty else { throw CompilationError(diagnostics: issues) }
         if graph.isFlow { return try compileFlow(graph) }

@@ -60,6 +60,7 @@ public enum BlockCatalog {
             flow("condition.or", "Eine Bedingung (ODER)", .haCondition, #"{"condition":"or","conditions":[{"condition":"template","value_template":"{{ true }}"}]}"#, ["conditions"]),
             flow("condition.not", "Bedingungen negieren", .haCondition, #"{"condition":"not","conditions":[{"condition":"template","value_template":"{{ false }}"}]}"#, ["conditions"]),
             flow("condition.custom", "Weitere HA-Bedingung", .haCondition, #"{"condition":"","target":{"entity_id":""},"options":{}}"#, ["condition"]),
+            flow("action.light", "Licht steuern", .haAction, #"{"action":"light.turn_on","target":{"area_id":[]},"data":{"brightness_pct":100}}"#, ["action"], "Ein/Aus separat schalten und Helligkeit, Farbe und weitere Parameter über Anschlüsse verbinden. Ziel: Entitäten, Bereiche oder Geräte."),
             flow("action.service", "Aktion / Dienst aufrufen", .haAction, #"{"action":"light.turn_on","target":{"entity_id":"light.flur"},"data":{}}"#, ["action"], "Beliebige Aktion aller installierten Integrationen; Daten und Ziel frei konfigurierbar."),
             flow("action.device", "Geräteaktion", .haAction, #"{"device_id":"","domain":"","type":""}"#, ["device_id","domain","type"]),
             flow("action.scene", "Szene aktivieren", .haAction, #"{"action":"scene.turn_on","target":{"entity_id":"scene.abend"}}"#, ["target.entity_id"]),

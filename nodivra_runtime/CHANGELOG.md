@@ -1,3 +1,12 @@
+# 0.5.0
+
+- Verknüpfbare Aktionsparameter: Zahlen, Ein/Aus, Texte, Listen und Objekte, einschließlich verschachtelter Felder und Ziele.
+- Ein/Aus-Folgeaktionen übernehmen geänderte Parameter während Ein. Bei Aus bleiben Wertänderungen ohne Geräteaktion.
+- Ausschalten verwendet das tatsächlich eingeschaltete Ziel, auch wenn die Zielauswahl inzwischen geändert wurde. Neue Ziele gelten beim nächsten Einschalten.
+- Wertauswahl um Ganzzahlen, Ein/Aus, Text, Listen und Objekte erweitert.
+- Verknüpfte Wartezeiten werden bei Start übernommen. Typen, Wertebereiche und fehlende Verbindungen werden geprüft.
+- Protokoll 5; ältere Programme bleiben kompatibel. Neue Parameterprogramme benötigen diese Version. Bestehende Programme bleiben nach Runtime-Neustart pausiert.
+
 # 0.4.0
 
 - Wertauswahl mit 2–8 unabhängigen Bedingungen, konfigurierbaren Zeit-/Zahlenwerten und Standardwert. Kleinere Eingangsnummer hat Vorrang; unbekannte höher priorisierte Bedingungen werden nicht als Aus behandelt.

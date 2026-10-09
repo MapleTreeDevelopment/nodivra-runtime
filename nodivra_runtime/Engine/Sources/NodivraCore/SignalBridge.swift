@@ -58,7 +58,7 @@ public enum SignalBridge {
             if b.kind.isMemory || b.kind.isMarker || b.kind.isContact { return false }
             return graph.wires.filter { $0.target == id }.contains { event($0.source, seen: seen.union([id])) }
         }
-        if graph.wires.filter({ $0.target == block.id }).contains(where: { event($0.source) }) { return "rising" }
+        if graph.wires.filter({ $0.target == block.id && $0.input == 0 }).contains(where: { event($0.source) }) { return "rising" }
         return actionBehavior(block)
     }
     public static func targetKey(_ config: ConfigValue) -> String {

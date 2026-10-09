@@ -327,11 +327,40 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('T benötigt', saved['error'])
         self.assertEqual(self.calls, [])
 
+    async def test_linked_parameters_transfer_and_execute_only_against_fixture(self):
+        control = block('digitalInput')
+        value = block('analogInput', {'initial': 25, 'maximum': 100})
+        path = [{'key': {'_0': 'data'}}, {'key': {'_0': 'brightness_pct'}}]
+        action = block('haAction', {'configuration': {'action': 'light.turn_on', 'target': {'area_id': ['fixture_kitchen']}, 'data': {'brightness_pct': 100}}, 'parameterBindings': [{'path': path, 'type': 'analog', 'label': 'Helligkeit', 'minimum': 0, 'maximum': 100}]})
+        wires = [dict(id=str(uuid.uuid4()), source=a['id'], target=action['id'], input=pin) for a,pin in [(control,0),(value,1)]]
+        p = dict(protocolVersion=5, timeZone='UTC', graph=dict(formatVersion=6, id=str(uuid.uuid4()), title='Linked parameters fixture', blocks=[control,value,action], wires=wires))
+        r = await self.upload(p)
+        self.assertFalse(r['enabled'])
+        self.assertEqual((await self.request('GET', 'automations/' + r['id']))['package'], p)
+        await self.enable(r, 'execute')
+        self.assertEqual(self.calls, [])
+        async def set_input(b, v):
+            await self.request('POST', 'automations/' + r['id'] + '/inputs/' + b['id'], dict(expectedRevision=r['revision'], value=v))
+            await asyncio.sleep(.3)
+        await set_input(value, 75)
+        self.assertEqual(self.calls, [])
+        await set_input(control, True)
+        self.assertEqual(self.calls[-1]['service'], 'turn_on')
+        self.assertEqual(self.calls[-1]['service_data']['brightness_pct'], 75)
+        self.assertEqual(self.calls[-1]['target'], {'area_id': ['fixture_kitchen']})
+        await set_input(value, 40)
+        self.assertEqual(self.calls[-1]['service_data']['brightness_pct'], 40)
+        await set_input(control, False)
+        self.assertEqual(self.calls[-1]['service'], 'turn_off')
+        count = len(self.calls)
+        await set_input(value, 10)
+        self.assertEqual(len(self.calls), count)
+
     async def test_authentication_and_no_browser_origin(self):
         async with ClientSession() as client:
             async with client.get(f'http://127.0.0.1:{self.port}/api/v1/status') as response: self.assertEqual(response.status,401)
         async with self.client.get(f'http://127.0.0.1:{self.port}/api/v1/status',headers={'Origin':'http://untrusted.test'}) as response: self.assertEqual(response.status,403)
-        self.assertEqual((await self.request('GET','status'))['protocolVersion'],4)
+        self.assertEqual((await self.request('GET','status'))['protocolVersion'],5)
 
     async def test_transfer_disabled_idempotent_and_conflict(self):
         p=package();request_id=str(uuid.uuid4());r=await self.upload(p,request_id=request_id)

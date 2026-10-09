@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ConfigurationPath: Hashable, Sendable {
+public enum ConfigurationPath: Hashable, Codable, Sendable {
     case key(String), index(Int)
 }
 public extension ConfigValue {

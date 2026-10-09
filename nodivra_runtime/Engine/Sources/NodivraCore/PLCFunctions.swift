@@ -69,7 +69,7 @@ public enum PLCFunction: String, Codable, CaseIterable, Sendable {
         let duration = PLCParameter("duration", "Dauer · s", 5, 0.1...86400)
         let limits = [PLCParameter("on", "Einschaltschwelle", 20), PLCParameter("off", "Ausschaltschwelle", 18)]
         return switch self {
-        case .valueSelect: [.init("valueUnit", "Werte als", "duration", ["duration", "number"]), .init("defaultValue", "Standardwert", 300)] + (1...8).map { .init("value\($0)", "Wert I\($0)", 120) }
+        case .valueSelect: [.init("valueUnit", "Werte als", "duration", ["duration", "number", "integer", "boolean", "text", "list", "object"]), .init("defaultValue", "Standardwert", 300)] + (1...8).map { .init("value\($0)", "Wert I\($0)", 120) }
         case .nand, .nor, .andEdge, .nandEdge, .firstCycle: []
         case .edge: [.init("edge", "Flanke", "Steigend", ["Steigend", "Fallend", "Beide"])]
         case .onOffDelay, .clockPulse, .randomDelay: [on, off]
@@ -137,14 +137,15 @@ public extension Block {
     var function: PLCFunction? { kind == .function ? PLCFunction(rawValue: text("function")) : nil }
     var isGate: Bool { [.and, .or, .xor].contains(kind) || function.map { [.nand, .nor, .andEdge, .nandEdge].contains($0) } == true }
     var inputCount: Int {
+        if hasActionParameters { return 1 + actionParameters.count }
         if function == .valueSelect { return valueSelectionCount }
         if isGate { let n = number("inputCount", kind == .function ? 5 : 2); return n.isFinite ? max(2, min(8, Int(n.clamped(to: 2...8)))) : 2 }
         if variableDuration { return 3 }
         if hasTimerReset { return 2 }
         return function?.pins.count ?? kind.inputCount
     }
-    var outputType: SignalType { function.map { $0.analogOutput ? .analog : .digital } ?? kind.outputType }
-    func inputType(_ pin: Int) -> SignalType { if variableDuration && pin == 2 { return .analog }; if let f = function { return f.pins.indices.contains(pin) ? f.pins[pin].1 : .digital }; return kind.inputType }
+    var outputType: SignalType { if function == .valueSelect { return selectionType }; return function.map { $0.analogOutput ? .analog : .digital } ?? kind.outputType }
+    func inputType(_ pin: Int) -> SignalType { if hasActionParameters && pin > 0 && pin <= actionParameters.count { return actionParameters[pin - 1].type }; if variableDuration && pin == 2 { return .analog }; if let f = function { return f.pins.indices.contains(pin) ? f.pins[pin].1 : .digital }; return kind.inputType }
     var outputCount: Int { isGate || kind == .not ? 5 : function?.hasValueOutput == true ? 2 : kind.hasOutput ? 1 : 0 }
     func outputType(_ pin: Int) -> SignalType { function?.hasValueOutput == true && pin == 1 ? .analog : outputType }
     func outputLabel(_ pin: Int) -> String { function?.hasValueOutput == true && pin == 1 ? "AQ · Zahlenwert" : isGate || kind == .not ? "Q · Abgang \(pin + 1)" : outputType == .analog ? "AQ" : "Q" }
