@@ -1,3 +1,10 @@
+# 0.4.0
+
+- Wertauswahl mit 2–8 unabhängigen Bedingungen, konfigurierbaren Zeit-/Zahlenwerten und Standardwert. Kleinere Eingangsnummer hat Vorrang; unbekannte höher priorisierte Bedingungen werden nicht als Aus behandelt.
+- Variabler Eingang T für Ein-/Ausschaltverzögerung und Zeitimpuls. Zeitwert in Sekunden, auch über AM-Merker/Kontakte. Übernahme beim Beginn der Laufzeit, laufende Zeiten bleiben unverändert. R bricht weiterhin ab.
+- Ungültiges T beim Start pausiert das Programm mit einer verständlichen Meldung. Bereich: 0,1 Sekunden bis 24 Stunden.
+- Protokoll 4 / Graphformat 5 für diese Funktionen, frühere Programme bleiben unterstützt. Benötigt Nodivra 0.14. Nach dem Runtime-Neustart bleiben Programme zur Prüfung pausiert.
+
 # 0.3.0
 
 - 40 neue Grund-/Sonderfunktionen: Zeit-, Kalender-, Zähl-, Speicher-, Analog- und Reglerbausteine sowie Anlaufimpuls, Entprellung und Begrenzung.

@@ -59,12 +59,14 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
     public var negatedInputs: [Int]
     public var options: [String: ConfigValue]
     public var catalogID: String?
+    /// Editor layout only. Repeated Q ports are aliases of the same runtime signal.
+    public var outputPortCount: Int?
     public init(id: UUID = UUID(), kind: BlockKind, title: String, entityID: String = "", x: Double = 0, y: Double = 0,
                 notes: String = "", negated: Bool = false, negatedInputs: [Int] = [], options: [String: ConfigValue] = [:], catalogID: String? = nil) {
         self.id = id; self.kind = kind; self.title = title; self.entityID = entityID; self.x = x; self.y = y
         self.notes = notes; self.negated = negated; self.negatedInputs = negatedInputs; self.options = options; self.catalogID = catalogID
     }
-    enum CodingKeys: String, CodingKey { case id, kind, title, entityID, x, y, notes, negated, negatedInputs, options, catalogID }
+    enum CodingKeys: String, CodingKey { case id, kind, title, entityID, x, y, notes, negated, negatedInputs, options, catalogID, outputPortCount }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id); kind = try c.decode(BlockKind.self, forKey: .kind)
@@ -75,6 +77,7 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
         negatedInputs = try c.decodeIfPresent([Int].self, forKey: .negatedInputs) ?? []
         options = try c.decodeIfPresent([String: ConfigValue].self, forKey: .options) ?? [:]
         catalogID = try c.decodeIfPresent(String.self, forKey: .catalogID)
+        outputPortCount = try c.decodeIfPresent(Int.self, forKey: .outputPortCount)
     }
     public func text(_ key: String, _ fallback: String = "") -> String { options[key]?.string ?? fallback }
     public func number(_ key: String, _ fallback: Double = 1) -> Double { options[key]?.number ?? fallback }
@@ -82,7 +85,13 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
     public var duration: Double { number("duration", kind == .button ? 0.5 : 5) }
     public var managedButton: Bool { kind == .button && entityID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var momentary: Bool { kind == .button && text("behavior", "momentary") == "momentary" }
-    public var inputLabels: [String] { if [.onDelay, .offDelay, .pulse].contains(kind) && flag("resettable") { return ["Trg", "R"] }; if let function, !isGate { return function.pins.map { $0.0 } }; return kind == .latch ? ["Setzen", "Rücksetzen"] : (0..<inputCount).map { kind.isFlow ? "Signal / Start" : "I\($0 + 1)" } }
+    public var inputLabels: [String] {
+        if variableDuration { return ["Trg", "R", "T · Sekunden"] }
+        if hasTimerReset { return ["Trg", "R"] }
+        if function == .valueSelect { return (0..<inputCount).map { "I\($0 + 1) · \(selectionDescription(selectionValue($0)))" } }
+        if let function, !isGate { return function.pins.map { $0.0 } }
+        return kind == .latch ? ["Setzen", "Rücksetzen"] : (0..<inputCount).map { kind.isFlow ? "Signal / Start" : "I\($0 + 1)" }
+    }
     public var configuration: ConfigValue { options["configuration"] ?? .object([:]) }
 }
 public struct Wire: Identifiable, Codable, Equatable, Sendable {
@@ -91,9 +100,11 @@ public struct Wire: Identifiable, Codable, Equatable, Sendable {
     public var target: UUID
     public var input: Int
     public var output: Int = 0
-    public init(source: UUID, target: UUID, input: Int, output: Int = 0, id: UUID = UUID()) { self.id = id; self.source = source; self.target = target; self.input = input; self.output = output }
-    enum CodingKeys: String, CodingKey { case id, source, target, input, output }
-    public init(from decoder: Decoder) throws { let c = try decoder.container(keyedBy: CodingKeys.self); id = try c.decode(UUID.self, forKey: .id); source = try c.decode(UUID.self, forKey: .source); target = try c.decode(UUID.self, forKey: .target); input = try c.decode(Int.self, forKey: .input); output = try c.decodeIfPresent(Int.self, forKey: .output) ?? 0 }
+    /// Optional visual Q alias; `output` always retains its actual runtime channel.
+    public var displayOutput: Int?
+    public init(source: UUID, target: UUID, input: Int, output: Int = 0, displayOutput: Int? = nil, id: UUID = UUID()) { self.id = id; self.source = source; self.target = target; self.input = input; self.output = output; self.displayOutput = displayOutput }
+    enum CodingKeys: String, CodingKey { case id, source, target, input, output, displayOutput }
+    public init(from decoder: Decoder) throws { let c = try decoder.container(keyedBy: CodingKeys.self); id = try c.decode(UUID.self, forKey: .id); source = try c.decode(UUID.self, forKey: .source); target = try c.decode(UUID.self, forKey: .target); input = try c.decode(Int.self, forKey: .input); output = try c.decodeIfPresent(Int.self, forKey: .output) ?? 0; displayOutput = try c.decodeIfPresent(Int.self, forKey: .displayOutput) }
 }
 public struct AutomationGraph: Codable, Equatable, Sendable {
     public var formatVersion = 2
@@ -102,7 +113,7 @@ public struct AutomationGraph: Codable, Equatable, Sendable {
     public var blocks: [Block]
     public var wires: [Wire]
     public var importContext: ImportContext?
-    public init(id: UUID = UUID(), title: String, blocks: [Block], wires: [Wire]) { self.id = id; self.title = title; self.blocks = blocks; self.wires = wires; if blocks.contains(where: { $0.kind.isPLC }) { formatVersion = 3 }; if usesExtendedPLC { formatVersion = 4 } }
+    public init(id: UUID = UUID(), title: String, blocks: [Block], wires: [Wire]) { self.id = id; self.title = title; self.blocks = blocks; self.wires = wires; if blocks.contains(where: { $0.kind.isPLC }) { formatVersion = 3 }; if usesExtendedPLC { formatVersion = 4 }; if usesVariableParameters { formatVersion = 5 } }
     /// Preserve native event sequences until a signal source/adapter is used.
     public var isFlow: Bool {
         !blocks.isEmpty && blocks.allSatisfy { $0.kind.isFlow } &&

@@ -1,4 +1,4 @@
-# Funktionsumfang · Nodivra 0.13 / Runtime 0.3
+# Funktionsumfang · Nodivra 0.14 / Runtime 0.4
 
 Eigenständige Softwareumsetzung nach dem Funktionsprinzip des bereitgestellten LOGO!-Systemhandbuchs (08/2024, A5E33039696-AM). Keine vollständige 1:1-Nachbildung von LOGO!-Hardware oder Soft Comfort. Die folgende Zuordnung macht reduzierte Optionen sichtbar.
 
@@ -6,7 +6,7 @@ Eigenständige Softwareumsetzung nach dem Funktionsprinzip des bereitgestellten 
 
 Neue UND, ODER, XOR, NAND, NOR und die beiden Gate-Flankenauswertungen beginnen mit fünf Eingängen. Zwei bis acht sind im Inspector wählbar. Verbundene zusätzliche Eingänge müssen vor dem Verkleinern gelöst werden. Alte UND/ODER/XOR-Dateien behalten zunächst ihre zwei Eingänge.
 
-Diese Logikbausteine und NICHT haben fünf sichtbare Q-Abgänge. Sie tragen dasselbe Ergebnis; jeder kann mehrere Ziele versorgen. Kein Duplizieren des Bausteins für einen Abzweig nötig. Ein Eingang nimmt genau eine Leitung auf. Freie UND-/NAND-Eingänge sind Ein, freie ODER-/NOR-/XOR-Eingänge Aus. Mindestens ein Eingang muss verbunden sein. Unbekannte verbundene Eingangswerte bleiben unbekannt. Eingänge und Q lassen sich digital negieren.
+Diese Logikbausteine und NICHT haben ein bis acht einstellbare sichtbare Q-Abgänge, zunächst fünf. Sie tragen dasselbe Ergebnis; jeder kann mehrere Ziele versorgen. Kein Duplizieren des Bausteins für einen Abzweig nötig. Ein Eingang nimmt genau eine Leitung auf. Freie UND-/NAND-Eingänge sind Ein, freie ODER-/NOR-/XOR-Eingänge Aus. Mindestens ein Eingang muss verbunden sein. Unbekannte verbundene Eingangswerte bleiben unbekannt. Eingänge und Q lassen sich digital negieren.
 
 Q ist digital, AQ numerisch. Zähler, Frequenz- und Betriebsstundenzähler besitzen beide Ausgangstypen. Numerische Signale werden über Analogvergleich oder Schwellwertschalter in Schaltsignale umgewandelt. Rückführungen benötigen M-/AM-Merker.
 
@@ -69,6 +69,12 @@ Alle neuen Funktionen laufen in derselben Swift-Engine auf dem Mac und in der Ru
 
 R bedeutet Rücksetzen. Beim RS/SR- und Stromstoßrelais ist der Vorrang wählbar; bei anderen Funktionen hat Reset Vorrang. Unbeschaltete digitale Sonderfunktionspins sind Aus, optionale En-Pins von Überwachung/PWM/Multiplexer sind Ein. Nicht vorhandene analoge Pflichtanschlüsse werden diagnostiziert. Zahlen-/Auswahlwerte werden vor Ausführung geprüft.
 
-Nach Neustart bleiben Programme pausiert. Merker, Register, Zeit- und Zählstände werden beim bewussten Start neu initialisiert. Noch offen: Remanenz, programmübergreifende Merker, Parameterreferenzen, Hardware-Spezialmerker, VM/S7/Modbus-Anbindung, Soft-Comfort-Dateiformate, wiederverwendbare Unterprogramme und der oben ausgewiesene zusätzliche Optionsumfang.
+Nach Neustart bleiben Programme pausiert. Merker, Register, Zeit- und Zählstände werden beim bewussten Start neu initialisiert. Noch offen: Remanenz, programmübergreifende Merker, weitere Parameterreferenzen außerhalb der drei grundlegenden Zeitbausteine, Hardware-Spezialmerker, VM/S7/Modbus-Anbindung, Soft-Comfort-Dateiformate, wiederverwendbare Unterprogramme und der oben ausgewiesene zusätzliche Optionsumfang.
 
 Erweiterte Programme verwenden Graphformat 4 / Runtime-Protokoll 3. Ältere Formate 2/3 und Protokolle 1/2 bleiben unterstützt. Eine ältere Runtime wird vor Transfer neuer Funktionen abgewiesen. Neue Dokumente nicht mit einer älteren App überschreiben; vorherige Projektdateien und unveränderte lokale Entwürfe bleiben gesichert.
+
+## Variable Zeiten ab 0.14
+
+Wertauswahl mit 2–8 unabhängigen Bedingungen, konfigurierbaren Werten, Standardwert und eindeutiger Priorität. Eingänge von oben nach unten: I1 gewinnt vor I2 usw. Zeitwerte werden in Sekunden an AQ ausgegeben. Zahlenmodus bleibt auch für andere Parameterverknüpfungen nutzbar.
+
+Ein-/Ausschaltverzögerung und Zeitimpuls besitzen optional T (analog) neben Trg und R. Übernahme am Start der Laufzeit; laufende Zeit bleibt konstant. Ungültiges T beim Start pausiert die Ausführung. Diese Erweiterung benötigt Graphformat 5 / Protokoll 4. Feste Zeiten und andere bisherige Funktionen bleiben rückwärtskompatibel. Details: [Variable Zeiten](VARIABLE-TIMES.md).

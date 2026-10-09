@@ -17,7 +17,7 @@ public extension Block {
     var initialInput: String { kind == .analogInput ? String(number("initial", 0)) : (flag("initial") ? "on" : "off") }
 }
 public extension AutomationGraph {
-    var usesExtendedPLC: Bool { blocks.contains { $0.kind == .function || $0.options["inputCount"] != nil || $0.flag("resettable") || $0.options["priority"] != nil } || wires.contains { $0.output != 0 } }
+    var usesExtendedPLC: Bool { usesVariableParameters || blocks.contains { $0.kind == .function || $0.options["inputCount"] != nil || $0.flag("resettable") || $0.options["priority"] != nil } || wires.contains { $0.output != 0 } }
     var usesPLCCycle: Bool { formatVersion >= 3 || usesExtendedPLC || blocks.contains { $0.kind.isPLC } }
     /// Named markers are scoped to a program. UUIDs are the stable identities.
     func nextMarkerName(analog: Bool) -> String {

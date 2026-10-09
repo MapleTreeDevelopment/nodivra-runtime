@@ -1,6 +1,6 @@
-# Nodivra Runtime 0.3.0
+# Nodivra Runtime 0.4.0
 
-HA-OS-App-Paket für amd64 und aarch64. Runtime 0.3 ergänzt erweiterbare Logikanschlüsse und 40 Grund-/Sonderfunktionen. Neue Programme verwenden Protokoll 3, die bisherigen Protokolle 1 und 2 bleiben unterstützt. Engine und API besitzen automatisierte Tests mit isoliertem HA-Testserver. Die Abnahme auf einer echten HA-Installation und unter Dauerlast ist separat erforderlich. Automatische Einrichtung über https://github.com/MapleTreeDevelopment/nodivra-runtime; das lokale ZIP bleibt als manueller Weg erhalten.
+HA-OS-App-Paket für amd64 und aarch64. Runtime 0.4 ergänzt Wertauswahl und variable Timer-Eingänge T. Diese Funktionen verwenden Protokoll 4 / Graphformat 5 und benötigen Nodivra 0.14; Protokolle 1–3 bleiben unterstützt. Engine und API besitzen automatisierte Tests mit isoliertem HA-Testserver. Die Abnahme auf einer echten HA-Installation und unter Dauerlast ist separat erforderlich. Automatische Einrichtung über https://github.com/MapleTreeDevelopment/nodivra-runtime; das lokale ZIP bleibt als manueller Weg erhalten.
 
 ## Installation aus Nodivra
 
@@ -22,7 +22,7 @@ Die Sicherung liegt zunächst auf dem HA-Datenträger. Unter Einstellungen → S
 ## Manueller Ersatzweg nach Freigabe des HA-OS-Updates
 
 1. Vollständige HA-Sicherung erstellen und herunterladen. Bei einer VM zusätzlich einen Snapshot des ausgeschalteten Systems anlegen, bevor das Betriebssystem verändert wird.
-2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.3.0.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
+2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.4.0.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
 3. Auf einer von Supervisor unterstützten HA-OS-Version den App-Store neu laden. Nodivra Runtime erscheint unter den lokalen Apps. Installieren. Der erste Build lädt offizielle Swift-/Python-Abhängigkeiten und benötigt Zeit und freien Speicher. Die Architektur wird vom Build gewählt.
 4. Runtime starten und **Weboberfläche öffnen** wählen. Dort **Schlüssel generieren** und **Schlüssel speichern & verwenden** anklicken. 64 zufällige Zeichen werden erzeugt und in den HA-App-Optionen gespeichert; ein bisheriger gültiger Schlüssel wird erst nach Bestätigung ersetzt. Der Schlüssel lässt sich verborgen halten und kopieren. Ohne gültigen Schlüssel bleibt die externe Runtime-API gesperrt, die Einrichtung ist erreichbar.
 5. Auf dem Mac Runtime-Adresse `http://homeassistant.local:8668` und denselben Schlüssel eintragen. Lokales HTTP muss ausdrücklich erlaubt werden. Schlüssel und Programme laufen bei HTTP unverschlüsselt über das lokale Netz; Port 8668 nicht öffentlich freigeben. Die aktuelle Runtime terminiert selbst kein TLS.

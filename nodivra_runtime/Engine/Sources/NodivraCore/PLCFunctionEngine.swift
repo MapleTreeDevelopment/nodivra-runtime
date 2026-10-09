@@ -42,6 +42,15 @@ struct PLCFunctionState: Sendable {
         if seed { value = f == .counter ? n("startValue") : f == .ramp ? n("initial") : 0 }
         var digitalResult: Bool?, analogResult: Double?
         switch f {
+        case .valueSelect:
+            // Resolve in pin order. An unknown higher-priority input must not
+            // accidentally select a lower-priority value or the fallback.
+            var selected = b.selectionDefault
+            for pin in 0..<b.inputCount {
+                guard let enabled = d(pin) else { return (nil, nil, nil) }
+                if enabled { selected = b.selectionValue(pin); break }
+            }
+            analogResult = selected
         case .firstCycle:
             digitalResult = !seed && count == 0
             if !seed { count = 1 }

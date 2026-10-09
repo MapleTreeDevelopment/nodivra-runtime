@@ -31,7 +31,7 @@ public struct GraphFragment: Codable, Equatable, Sendable {
             if let reference = block.markerID, let replacement = mapping[reference] { b.options["markerID"] = .string(replacement.uuidString) }
             return b
         }
-        result.wires = wires.map { .init(source: mapping[$0.source]!, target: mapping[$0.target]!, input: $0.input, output: $0.output) }
+        result.wires = wires.map { .init(source: mapping[$0.source]!, target: mapping[$0.target]!, input: $0.input, output: $0.output, displayOutput: $0.displayOutput) }
         return result
     }
 }

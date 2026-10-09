@@ -162,10 +162,23 @@ public struct RuntimeEngine: Sendable {
                 if values.allSatisfy({ $0 != nil }) { value = b.kind == .and ? values.allSatisfy { $0 == true } : b.kind == .or ? values.contains(true) : values.filter { $0 == true }.count % 2 == 1 }
             case .not: value = incoming.map { !$0 }
             case .onDelay, .offDelay, .pulse:
-                if b.flag("resettable") && input(1) != false {
+                if b.hasTimerReset && input(1) != false {
                     deadlines.removeValue(forKey: b.id); memory.removeValue(forKey: b.id)
                     value = input(1) == true ? false : nil; previous[b.id] = false
                     break
+                }
+                let startsTimer: Bool = !seed && incoming != nil && (
+                    b.kind == .offDelay ? incoming == false && prior == true :
+                    incoming == true && prior == false && (b.kind != .pulse || b.text("retrigger", "restart") == "restart" || deadlines[b.id] == nil))
+                var duration = b.duration
+                if b.variableDuration && startsTimer {
+                    guard let requested = analogInput(2), requested.isFinite, (0.1...86400).contains(requested) else {
+                        deadlines.removeValue(forKey: b.id); memory.removeValue(forKey: b.id)
+                        signals.removeValue(forKey: b.id)
+                        fault = "\(b.title): T benötigt einen gültigen Zeitwert von 0,1 Sekunden bis 24 Stunden. Ausführung pausiert."
+                        return []
+                    }
+                    duration = requested
                 }
                 if let current = incoming {
                     if seed {
@@ -174,16 +187,16 @@ public struct RuntimeEngine: Sendable {
                         switch b.kind {
                         case .onDelay:
                             if !current { deadlines.removeValue(forKey: b.id); memory[b.id] = false }
-                            else if prior == false { deadlines[b.id] = time + b.duration }
+                            else if prior == false { deadlines[b.id] = time + duration }
                             if let end = deadlines[b.id], end <= time { memory[b.id] = true; deadlines.removeValue(forKey: b.id) }
                             value = memory[b.id] ?? false
                         case .offDelay:
                             if current { deadlines.removeValue(forKey: b.id) }
-                            else if prior == true { deadlines[b.id] = time + b.duration }
+                            else if prior == true { deadlines[b.id] = time + duration }
                             value = current || (deadlines[b.id].map { $0 > time } ?? false)
                             if !current && value == false { deadlines.removeValue(forKey: b.id) }
                         default:
-                            if current && prior == false && (b.text("retrigger", "restart") == "restart" || deadlines[b.id] == nil) { deadlines[b.id] = time + b.duration }
+                            if current && prior == false && (b.text("retrigger", "restart") == "restart" || deadlines[b.id] == nil) { deadlines[b.id] = time + duration }
                             value = deadlines[b.id].map { $0 > time } ?? false
                             if value == false { deadlines.removeValue(forKey: b.id) }
                         }

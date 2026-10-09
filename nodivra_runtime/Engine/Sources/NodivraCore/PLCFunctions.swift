@@ -10,11 +10,13 @@ public struct PLCParameter: Sendable {
     public init(_ key: String, _ label: String, _ value: String, _ choices: [String] = []) { self.key = key; self.label = label; initial = .string(value); self.choices = choices; range = nil }
 }
 public enum PLCFunction: String, Codable, CaseIterable, Sendable {
+    case valueSelect
     case nand, nor, andEdge, nandEdge, edge, onOffDelay, retentiveOnDelay, wipingRelay, delayedPulse, clockPulse, randomDelay, staircase, comfort
     case yearClock, astroClock, stopwatch, counter, hours, frequency, firstCycle
     case threshold, differenceThreshold, comparator, monitor, amplifier, impulseRelay, shiftRegister, multiplexer, ramp, pi, pwm, math, mathError, filter, minMax, average, toInteger, toFloat, debounce, limit
     public var title: String {
         switch self {
+        case .valueSelect: "Wertauswahl"
         case .nand: "NAND"; case .nor: "NOR"; case .andEdge: "UND mit Flankenauswertung"; case .nandEdge: "NAND mit Flankenauswertung"; case .edge: "Flankenimpuls"
         case .onOffDelay: "Ein-/Ausschaltverzögerung"; case .retentiveOnDelay: "Speichernde Einschaltverzögerung"; case .wipingRelay: "Wischrelais"; case .delayedPulse: "Flankengetriggertes Wischrelais"
         case .clockPulse: "Asynchroner Impulsgeber"; case .randomDelay: "Zufallsgenerator"; case .staircase: "Treppenlichtschalter"; case .comfort: "Komfortschalter"
@@ -39,6 +41,7 @@ public enum PLCFunction: String, Codable, CaseIterable, Sendable {
     }
     public var pins: [(String, SignalType)] {
         switch self {
+        case .valueSelect: (1...4).map { ("I\($0)", .digital) }
         case .nand, .nor, .andEdge, .nandEdge: (1...5).map { ("I\($0)", .digital) }
         case .yearClock, .astroClock, .firstCycle: []
         case .counter: [("Cnt", .digital), ("Dir", .digital), ("R", .digital)]
@@ -59,13 +62,14 @@ public enum PLCFunction: String, Codable, CaseIterable, Sendable {
         default: [("Trg / En", .digital), ("R", .digital)]
         }
     }
-    public var analogOutput: Bool { [.stopwatch, .amplifier, .multiplexer, .ramp, .pi, .math, .filter, .minMax, .average, .toInteger, .toFloat, .limit].contains(self) }
+    public var analogOutput: Bool { [.valueSelect, .stopwatch, .amplifier, .multiplexer, .ramp, .pi, .math, .filter, .minMax, .average, .toInteger, .toFloat, .limit].contains(self) }
     public var hasValueOutput: Bool { [.counter, .hours, .frequency].contains(self) }
     public var parameters: [PLCParameter] {
         let on = PLCParameter("onTime", "Einschaltzeit · s", 5, 0.1...86400), off = PLCParameter("offTime", "Ausschaltzeit · s", 5, 0.1...86400)
         let duration = PLCParameter("duration", "Dauer · s", 5, 0.1...86400)
         let limits = [PLCParameter("on", "Einschaltschwelle", 20), PLCParameter("off", "Ausschaltschwelle", 18)]
         return switch self {
+        case .valueSelect: [.init("valueUnit", "Werte als", "duration", ["duration", "number"]), .init("defaultValue", "Standardwert", 300)] + (1...8).map { .init("value\($0)", "Wert I\($0)", 120) }
         case .nand, .nor, .andEdge, .nandEdge, .firstCycle: []
         case .edge: [.init("edge", "Flanke", "Steigend", ["Steigend", "Fallend", "Beide"])]
         case .onOffDelay, .clockPulse, .randomDelay: [on, off]
@@ -103,6 +107,7 @@ public enum PLCFunction: String, Codable, CaseIterable, Sendable {
         case .counter: "Zählt steigende Flanken. Dir = Ein zählt abwärts. R setzt auf den Startwert. Q folgt den Schwellen, AQ liefert den Zählwert."
         case .hours: "Summiert die Einschaltzeit. Q meldet das Wartungsintervall; AQ zeigt Stunden. R setzt zurück."
         case .firstCycle: "Ein für genau den ersten Zyklus nach dem bewussten Start eines Programms. Kann angeschlossene Aktionen beim Start auslösen. Nach Runtime-Neustart bleiben Programme zunächst pausiert."
+        case .valueSelect: "Jeder Ein-Eingang wählt seinen eingestellten Wert. Bei mehreren aktiven Eingängen hat die kleinere Nummer Vorrang. Sind alle Aus, gilt der Standardwert. Zeiten werden als Sekunden an T weitergegeben; kein zusätzlicher HA-Helfer nötig."
         case .frequency: "Zählt erkannte Flanken je Messfenster und liefert Hz. Für langsame HA-Signale, nicht für Hardware-Hochgeschwindigkeitszähler."
         case .stopwatch: "Misst Sekunden, solange En Ein ist. R hat Vorrang und setzt auf null."
         case .retentiveOnDelay: "Ein Impuls startet die Zeit. Q bleibt nach Ablauf Ein bis R. Speicherung während des Programmlaufs."
@@ -132,18 +137,21 @@ public extension Block {
     var function: PLCFunction? { kind == .function ? PLCFunction(rawValue: text("function")) : nil }
     var isGate: Bool { [.and, .or, .xor].contains(kind) || function.map { [.nand, .nor, .andEdge, .nandEdge].contains($0) } == true }
     var inputCount: Int {
+        if function == .valueSelect { return valueSelectionCount }
         if isGate { let n = number("inputCount", kind == .function ? 5 : 2); return n.isFinite ? max(2, min(8, Int(n.clamped(to: 2...8)))) : 2 }
-        if [.onDelay, .offDelay, .pulse].contains(kind) && flag("resettable") { return 2 }
+        if variableDuration { return 3 }
+        if hasTimerReset { return 2 }
         return function?.pins.count ?? kind.inputCount
     }
     var outputType: SignalType { function.map { $0.analogOutput ? .analog : .digital } ?? kind.outputType }
-    func inputType(_ pin: Int) -> SignalType { if let f = function { return f.pins.indices.contains(pin) ? f.pins[pin].1 : .digital }; return kind.inputType }
+    func inputType(_ pin: Int) -> SignalType { if variableDuration && pin == 2 { return .analog }; if let f = function { return f.pins.indices.contains(pin) ? f.pins[pin].1 : .digital }; return kind.inputType }
     var outputCount: Int { isGate || kind == .not ? 5 : function?.hasValueOutput == true ? 2 : kind.hasOutput ? 1 : 0 }
     func outputType(_ pin: Int) -> SignalType { function?.hasValueOutput == true && pin == 1 ? .analog : outputType }
     func outputLabel(_ pin: Int) -> String { function?.hasValueOutput == true && pin == 1 ? "AQ · Zahlenwert" : isGate || kind == .not ? "Q · Abgang \(pin + 1)" : outputType == .analog ? "AQ" : "Q" }
     func unusedDigitalInput(_ pin: Int) -> Bool? {
         if isGate { return kind == .and || function == .nand || function == .andEdge || function == .nandEdge }
-        if kind == .latch || [.onDelay, .offDelay, .pulse].contains(kind) && pin == 1 && flag("resettable") { return false }
+        if function == .valueSelect { return false }
+        if kind == .latch || hasTimerReset && pin == 1 { return false }
         if let f = function { return f.pins.indices.contains(pin) && f.pins[pin].1 == .digital ? ([.monitor, .pwm, .multiplexer].contains(f) && pin == (f == .multiplexer ? 0 : 1)) : nil }
         return nil
     }

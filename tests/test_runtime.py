@@ -254,6 +254,24 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.calls, [])
         self.assertEqual((await self.request('GET', 'automations/' + r['id']))['package']['graph']['wires'][-2]['output'], 4)
 
+    async def test_eight_visual_q_aliases_preserve_metadata_on_protocol_three(self):
+        source = block('digitalInput')
+        gate = block('and', {'inputCount': 5})
+        gate['outputPortCount'] = 8
+        outputs = [block('digitalOutput') for _ in range(8)]
+        wires = [dict(id=str(uuid.uuid4()), source=source['id'], target=gate['id'], input=0, output=0)]
+        wires += [dict(id=str(uuid.uuid4()), source=gate['id'], target=target['id'], input=0, output=0, displayOutput=i) for i,target in enumerate(outputs)]
+        p = dict(protocolVersion=3, timeZone='UTC', graph=dict(formatVersion=4, id=str(uuid.uuid4()), title='Visual Q aliases', blocks=[source,gate]+outputs, wires=wires))
+        r = await self.upload(p)
+        saved = await self.request('GET', 'automations/' + r['id'])
+        self.assertEqual(saved['package'], p)
+        await self.enable(r)
+        await self.request('POST', 'automations/' + r['id'] + '/inputs/' + source['id'], dict(expectedRevision=r['revision'], value=True))
+        await asyncio.sleep(.3)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertTrue(all(live['signals'][target['id'].upper()] for target in outputs))
+        self.assertEqual(self.calls, [])
+
     async def test_extended_function_timer_reports_real_remaining(self):
         source = block('digitalInput')
         timer = block('function', {'function': 'retentiveOnDelay', 'duration': 2})
@@ -267,11 +285,53 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(live['signals'][timer['id'].upper()])
         self.assertEqual(self.calls, [])
 
+    async def test_variable_time_transfers_and_reports_captured_countdown(self):
+        trigger = block('digitalInput')
+        condition = block('digitalInput')
+        select = block('function', {'function': 'valueSelect', 'inputCount': 2, 'value1': 2, 'defaultValue': 5})
+        timer = block('offDelay', {'durationSource': 'input'})
+        wires = [dict(id=str(uuid.uuid4()), source=a['id'], target=b['id'], input=pin)
+                 for a,b,pin in [(condition,select,0),(select,timer,2),(trigger,timer,0)]]
+        p = dict(protocolVersion=4, timeZone='UTC', graph=dict(formatVersion=5, id=str(uuid.uuid4()), title='Variable time', blocks=[trigger,condition,select,timer], wires=wires))
+        r = await self.upload(p)
+        self.assertFalse(r['enabled'])
+        self.assertEqual((await self.request('GET', 'automations/' + r['id']))['package'], p)
+        await self.enable(r)
+        async def set_input(b, value):
+            await self.request('POST', 'automations/' + r['id'] + '/inputs/' + b['id'], dict(expectedRevision=r['revision'], value=value))
+            await asyncio.sleep(.25)
+        await set_input(condition, True)
+        await set_input(trigger, True)
+        await set_input(trigger, False)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertTrue(live['signals'][timer['id'].upper()])
+        self.assertGreater(live['remaining'][timer['id'].upper()], 1)
+        self.assertLessEqual(live['remaining'][timer['id'].upper()], 2)
+        await set_input(condition, False)
+        changed = await self.request('GET', 'live/' + r['id'])
+        self.assertEqual(changed['analogSignals'][select['id'].upper()], 5)
+        self.assertLess(changed['remaining'][timer['id'].upper()], live['remaining'][timer['id'].upper()])
+        self.assertEqual(self.calls, [])
+
+    async def test_invalid_dynamic_time_pauses_without_device_calls(self):
+        trigger = block('digitalInput')
+        value = block('analogInput', {'initial': 0})
+        timer = block('pulse', {'durationSource': 'input'})
+        wires = [dict(id=str(uuid.uuid4()), source=a['id'], target=timer['id'], input=pin) for a,pin in [(trigger,0),(value,2)]]
+        p = dict(protocolVersion=4, timeZone='UTC', graph=dict(formatVersion=5, id=str(uuid.uuid4()), title='Invalid T', blocks=[trigger,value,timer], wires=wires))
+        r = await self.upload(p); await self.enable(r)
+        await self.request('POST', 'automations/' + r['id'] + '/inputs/' + trigger['id'], dict(expectedRevision=r['revision'], value=True))
+        await asyncio.sleep(.3)
+        saved = await self.request('GET', 'automations/' + r['id'])
+        self.assertFalse(saved['enabled'])
+        self.assertIn('T benötigt', saved['error'])
+        self.assertEqual(self.calls, [])
+
     async def test_authentication_and_no_browser_origin(self):
         async with ClientSession() as client:
             async with client.get(f'http://127.0.0.1:{self.port}/api/v1/status') as response: self.assertEqual(response.status,401)
         async with self.client.get(f'http://127.0.0.1:{self.port}/api/v1/status',headers={'Origin':'http://untrusted.test'}) as response: self.assertEqual(response.status,403)
-        self.assertEqual((await self.request('GET','status'))['protocolVersion'],3)
+        self.assertEqual((await self.request('GET','status'))['protocolVersion'],4)
 
     async def test_transfer_disabled_idempotent_and_conflict(self):
         p=package();request_id=str(uuid.uuid4());r=await self.upload(p,request_id=request_id)
