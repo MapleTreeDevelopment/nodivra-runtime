@@ -88,7 +88,7 @@ Quellen: [HA Apps](https://developers.home-assistant.io/docs/apps/), [App-Konfig
 
 Digitale Ein-/Ausgänge, analoge Ein-/Ausgänge, M-/AM-Merker, Kontakte und Analogvergleiche werden direkt von der gemeinsamen Swift-Engine ausgeführt. Merker werden gleichzeitig am Zyklusende gespeichert und erst im nächsten Zyklus sichtbar. Anfangswert 0; mit aktivierter Remanenz wird der gespeicherte Wert übernommen. HA-Attribute werden zusammen mit dem Zustand eingelesen; unbekannte Werte propagieren als unbekannt. Ausgänge senden Aktionen bei Wertänderungen, beim Laden wird kein Ausgang gesendet. Virtuelle Ausgänge senden keine HA-Aktionen. Analoge Lichtausgänge verwenden 0–100 Prozent, number/input_number verwenden set_value. Maximal 30 Aktionen pro Minute und Programm, global 120.
 
-GET `/api/v1/automations/{id}/inputs` liest virtuelle Eingänge eines laufenden Programms. POST `/api/v1/automations/{id}/inputs/{block-id}` setzt mit `expectedRevision` und typisiertem `value` einen solchen Eingang. Reale Entitäten, Merker und fremde Blöcke werden abgewiesen. Werte sind pro Programm getrennt und werden beim Aktivieren zurückgesetzt. Live-GET bleibt rein beobachtend.
+GET `/api/v1/automations/{id}/inputs` liest virtuelle Eingänge eines laufenden Programms. POST `/api/v1/automations/{id}/inputs/{block-id}` setzt mit `expectedRevision` und typisiertem `value` einen solchen Eingang. Reale Entitäten, Merker und fremde Blöcke werden abgewiesen. Werte sind pro Programm getrennt. Ohne Remanenz werden sie beim Aktivieren zurückgesetzt; mit Remanenz wird der gespeicherte Zustand übernommen. Live-GET bleibt rein beobachtend.
 
 ## Erweiterte Bausteine (Protokoll 3)
 
@@ -96,10 +96,12 @@ GET `/api/v1/automations/{id}/inputs` liest virtuelle Eingänge eines laufenden 
 
 Logikbausteine unterstützen zwei bis acht Eingänge und fünf identische Q-Abgänge. Unverbundene Gate-Eingänge sind neutral; verbundene unbekannte Werte bleiben unbekannt. `Wire.output` wählt den Ausgang, alte Dateien ohne dieses Feld verwenden Ausgang 0. Zähler, Betriebsstunden und Frequenz besitzen zusätzlich einen analogen AQ-Ausgang (Port 1).
 
-Der Anlaufimpuls ist im ersten Zyklus nach dem ausdrücklich gestarteten Programm Ein und kann Initialisierungsaktionen auslösen. Alle anderen Wiederanlaufregeln und Aktionsgrenzen bleiben bestehen. Keine Remanenz oder garantierte Echtzeit. Hardwaregebundene LOGO!-Funktionen, VM-Adressierung und Soft-Comfort-Dateien sind nicht implementiert. Einige Sonderfunktionen sind auf das HA-Zyklusmodell reduziert: Zeitabtastung statt Hardwarezählung, jährliches Datumsfenster, parametrische PI-Regelung und numerische Konvertierung ohne VM-Bindung. Meldungen erfolgen zunächst als Protokolleintrag.
+Der Anlaufimpuls ist im ersten Zyklus eines neu initialisierten Programms Ein und kann Initialisierungsaktionen auslösen. Beim Fortsetzen aus einem gespeicherten Laufzustand wird er nicht erneut erzeugt. Alle anderen Wiederanlaufregeln und Aktionsgrenzen bleiben bestehen. Keine garantierte Echtzeit. Hardwaregebundene LOGO!-Funktionen, VM-Adressierung und Soft-Comfort-Dateien sind nicht implementiert. Einige Sonderfunktionen sind auf das HA-Zyklusmodell reduziert: Zeitabtastung statt Hardwarezählung, jährliches Datumsfenster, parametrische PI-Regelung und numerische Konvertierung ohne VM-Bindung. Meldungen erfolgen zunächst als Protokolleintrag.
 
 [Anleitung zu verknüpfbaren Parametern](docs/ACTION-PARAMETERS.md)
 
 ## Neustart & Speicher
 
 [Regeln, Zeitverhalten und Wiederherstellung](docs/RESTART-AND-MEMORY.md). Einstellbar pro pausierter Automation im HA-Dashboard. Alle Timer pausieren während der Unterbrechung. Speicherzyklus etwa eine Sekunde; bei Stromausfall kann der letzte Zyklus fehlen. Programmübergreifende Merker sind noch nicht enthalten.
+
+[Isolierte Ausfalltests](docs/CRASH-RECOVERY-TESTS.md) prüfen harte Prozessabbrüche mit echter Swift-Engine und einer lokalen HA-Nachbildung, einschließlich Restzeiten, Merkerzuständen und unbestätigten Aktionen.
