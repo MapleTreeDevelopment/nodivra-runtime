@@ -13,6 +13,5 @@ class AddonConfigTests(unittest.TestCase):
         match = re.search(r"^ingress_entry:\s*(\S+)", config.read_text(), re.MULTILINE)
         self.assertIsNotNone(match)
         entry = match.group(1).strip("\"'")
-        self.assertEqual(entry, "dashboards/")
-        self.assertEqual("/api/hassio_ingress/session/" + entry,
-                         "/api/hassio_ingress/session/dashboards/")
+        self.assertFalse(entry.startswith("/"))
+        self.assertNotIn("//", "/api/hassio_ingress/session/" + entry)

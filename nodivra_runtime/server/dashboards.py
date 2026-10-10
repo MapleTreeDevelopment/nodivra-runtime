@@ -191,6 +191,15 @@ class DashboardService:
         app.router.add_put("/api/v1/dashboards/{id}", self.save)
         app.router.add_get("/api/v1/dashboards/{id}/revisions", self.revisions)
         for operation in ("publish", "unpublish", "restore"): app.router.add_post("/api/v1/dashboards/{id}/"+operation, self.change)
+        prefix = "/api/v1/dashboard-display"
+        app.router.add_get(prefix+"/status", self.display_status)
+        app.router.add_get(prefix+"/published", self.list_published)
+        app.router.add_get(prefix+"/published/{id}", self.get_published)
+        app.router.add_get(prefix+"/published/{id}/values", self.live_values)
+        app.router.add_post(prefix+"/published/{id}/actions", self.action)
+        app.router.add_get(prefix+"/published/{id}/camera/{component}", self.camera)
+    async def display_status(self, request):
+        return web.json_response({"serverID": self.runtime.server_id, "version": self.runtime.version, "protocolVersion": 1, "connected": self.runtime.ha.connected})
     def ingress_routes(self, app, csrf):
         self.csrf = csrf
         app.router.add_get("/dashboards/", self.page)

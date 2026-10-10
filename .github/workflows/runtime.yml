@@ -26,3 +26,11 @@ jobs:
           -e NODIVRA_TEST_ENGINE=/usr/local/bin/NodivraEngine
           -v "$PWD:/tests:ro" -w /tests nodivra-runtime
           -m unittest discover -s tests -v
+      - name: Build the independent dashboard web service
+        run: docker build -t nodivra-dashboards ./nodivra_dashboards
+      - name: Verify dashboard gateway in its own image
+        run: >-
+          docker run --rm --entrypoint python
+          -v "$PWD:/tests:ro" -w /tests nodivra-dashboards
+          -m unittest discover -s tests -p test_dashboard_gateway.py -v
+

@@ -18,7 +18,8 @@ from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dashboards import DashboardService, DashboardError
 
-VERSION = "0.9.2"
+VERSION = "0.10.0"
+from dashboard_access import display_key, display_request
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
@@ -238,6 +239,7 @@ class HomeAssistant:
             self.waiting.pop(identity, None)
 
 class Runtime:
+    version = VERSION
     def __init__(self, path, key, engine_path, ha_base, ha_token):
         self.key = key if isinstance(key, str) and len(key) >= 32 else ""
         self.backup_path = Path(path) / "backups"
@@ -517,10 +519,15 @@ class Runtime:
         async def boundary(request, handler):
             if request.path != "/health":
                 supplied = request.headers.get("Authorization", "")
-                if len(self.key) < 32 or not hmac.compare_digest(supplied.encode(), ("Bearer " + self.key).encode()):
+                full_access = len(self.key) >= 32 and hmac.compare_digest(supplied.encode(), ("Bearer " + self.key).encode())
+                key = display_key(self.key)
+                display_access = bool(key) and hmac.compare_digest(supplied.encode(), ("Bearer " + key).encode())
+                if not full_access and not (display_access and display_request(request.path, request.method)):
                     return problem(401, "Runtime-Zugangsschlüssel fehlt oder ist ungültig.")
                 if request.headers.get("Origin"):
                     return problem(403, "Browser-Zugriffe auf die Runtime-API sind nicht zugelassen.")
+                if request.path.startswith("/api/v1/dashboard-display/") and not await self.ha.is_admin(request.headers.get("X-Nodivra-HA-User", "")):
+                    return problem(403, "Bitte mit einem Home-Assistant-Administratorkonto öffnen.")
             try:
                 if not request.path.startswith("/api/v1/dashboards") and request.content_length and request.content_length > 1024*1024:
                     return problem(413, "Anfrage zu groß.")
@@ -537,6 +544,7 @@ class Runtime:
                 return problem(503, "Runtime vorübergehend nicht verfügbar. Schreibstatus vor einer Wiederholung prüfen.")
         app = web.Application(middlewares=[boundary], client_max_size=4*1024*1024+65536)
         self.dashboards.routes(app)
+        app.router.add_get("/api/v1/dashboard-connection", self.dashboard_connection)
         app.router.add_get("/health", self.health)
         app.router.add_get("/api/v1/status", self.status)
         app.router.add_get("/api/v1/automations", self.list_programs)
@@ -554,12 +562,15 @@ class Runtime:
         app.on_cleanup.append(self.close)
         return app
 
+    async def dashboard_connection(self, request):
+        return web.json_response({"accessKey": display_key(self.key), "serverID": self.server_id, "protocolVersion": 1}, headers={"Cache-Control": "no-store"})
+
     async def health(self, request):
         ready = self.engine.process is not None and self.engine.process.returncode is None
         return web.json_response({"service": "nodivra-runtime", "version": VERSION}, status=200 if ready else 503)
 
     async def status(self, request):
-        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "dashboards.documents.v1"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
+        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "dashboards.documents.v1", "dashboards.display.v1"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
 
     async def list_programs(self, request):
         return web.json_response({"automations": self.records()})

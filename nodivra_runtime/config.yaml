@@ -1,5 +1,5 @@
 name: Nodivra Runtime
-version: "0.9.2"
+version: "0.10.0"
 slug: nodivra_runtime
 description: Gemeinsame Runtime für Nodivra Automationen und eigene Dashboards.
 arch:
@@ -11,10 +11,10 @@ init: false
 homeassistant_api: true
 ingress: true
 ingress_port: 8099
-ingress_entry: dashboards/
+ingress_entry: ""
 panel_admin: true
-panel_title: Nodivra Dashboards
-panel_icon: mdi:view-dashboard-outline
+panel_title: Nodivra Automationen
+panel_icon: mdi:graph-outline
 ports:
   8668/tcp: 8668
 ports_description:

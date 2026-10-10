@@ -1,3 +1,12 @@
+# 0.10.0
+
+- Unterstützt die separate HA-App „Nodivra Dashboards“ mit eigenem Webdienst.
+- Begrenzte Display-API nur für veröffentlichte Dashboards, Werte, Kameras und deren Bedienaktionen.
+- Eigener abgeleiteter Verbindungsschlüssel; kein Zugriff auf Automationen, Entwürfe oder Veröffentlichung.
+- Einrichtung der Dashboard-Verbindung aus der Mac-App ohne Abtippen von Schlüsseln.
+- Gemeinsame Speicherung und bestehende Wiederanlaufregeln bleiben erhalten. Die integrierte Dashboard-Ansicht bleibt erreichbar.
+- Die gemeinsame Runtime erscheint als „Nodivra Automationen“ in der HA-Seitenleiste.
+
 # 0.9.2
 
 - Korrigiert den direkten Dashboard-Einstieg über Home Assistant Ingress: kein doppelter Schrägstrich im Einstiegspfad.

@@ -1,0 +1,25 @@
+name: Nodivra Dashboards
+version: "0.1.0"
+slug: nodivra_dashboards
+description: Eigener Dashboard-Webdienst mit zentralen Daten aus der Nodivra Runtime.
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+ingress_entry: ""
+ingress_stream: true
+panel_admin: true
+panel_title: Nodivra Dashboards
+panel_icon: mdi:view-dashboard-outline
+options:
+  runtime_url: http://c74fad0a-nodivra-runtime:8668
+  access_key: ""
+  server_id: ""
+schema:
+  runtime_url: match(^http://[a-z0-9]+-nodivra-runtime:8668$)
+  access_key: password
+  server_id: str
