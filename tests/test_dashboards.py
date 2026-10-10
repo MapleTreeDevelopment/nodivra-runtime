@@ -89,6 +89,21 @@ class StoreTests(unittest.TestCase):
         self.assertIsNone(self.store.read(self.doc['id'])['publishedRevision'])
 
 class ServiceTests(unittest.IsolatedAsyncioTestCase):
+    def test_weather_values_preserve_units_missing_and_unavailable(self):
+        card=component('weather','weather.home'); doc=document(card)
+        card['weather']=dict(style='detail',showCondition=True,showHumidity=True,showWind=True)
+        validate(doc, complete=True)
+        values={'weather.home':'rainy','weather.home#temperature':'12.5','weather.home#temperature_unit':'°F','weather.home#humidity':'0','weather.home#wind_speed':float('nan'),'weather.home#access_token':'secret'}
+        service=DashboardService(SimpleNamespace(ha=SimpleNamespace(connected=True,states=values)),self.directory.name)
+        result=service.values(doc)[card['id']]
+        self.assertEqual(result['temperature'],12.5);self.assertEqual(result['temperature_unit'],'°F')
+        self.assertEqual(result['humidity'],0);self.assertNotIn('wind_speed',result);self.assertNotIn('secret',str(result))
+        values['weather.home']='unavailable'
+        result=service.values(doc)[card['id']]
+        self.assertFalse(result['known']);self.assertNotIn('temperature',result)
+        card['weather']['style']='invalid'
+        with self.assertRaises(DashboardError):validate(doc, complete=True)
+
     async def asyncSetUp(self):
         self.directory=tempfile.TemporaryDirectory()
         self.ha=SimpleNamespace(connected=True,states={'light.kitchen':'on','light.kitchen#brightness':'128','sensor.temperature':'21.5','camera.entrance':'idle','camera.entrance#access_token':'secret-camera-token'},is_admin=AsyncMock(return_value=True),action=AsyncMock(),base='http://not-used/api',token='never-in-browser',session=None)
@@ -98,10 +113,12 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         self.record=self.service.store.change(self.doc['id'],'save',request(document=self.doc))
         self.record=self.service.store.change(self.doc['id'],'publish',request(self.record))
         self.config=RuntimeConfiguration(self.runtime,'supervisor-secret');app=self.config.app()
+        # Exercise shared data endpoints behind the fixture authentication boundary.
+        self.service.routes(app)
         @web.middleware
         async def peer(req,handler):return await handler(req.clone(remote='172.30.32.2'))
         app.middlewares.insert(0,peer);self.client=TestClient(TestServer(app));await self.client.start_server()
-        self.path='/dashboards/api/published/'+self.doc['id'];self.headers={'X-Nodivra-CSRF':self.config.csrf}
+        self.path='/api/v1/dashboard-display/published/'+self.doc['id'];self.headers={'X-Nodivra-CSRF':self.config.csrf}
     async def asyncTearDown(self):
         await self.client.close()
         if self.ha.session:await self.ha.session.close()
@@ -124,7 +141,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         self.ha.area_lights=AsyncMock(return_value={'kitchen':['light.kitchen']})
         record=self.service.store.change(doc['id'],'save',request(document=doc))
         record=self.service.store.change(doc['id'],'publish',request(record))
-        path='/dashboards/api/published/'+doc['id']+'/actions'
+        path='/api/v1/dashboard-display/published/'+doc['id']+'/actions'
         payload=dict(componentID=c['id'],revision=record['revision'],requestID=uid(),on=False,areaID='forged')
         self.assertEqual((await self.client.post(path,json=payload,headers=self.headers)).status,200)
         self.ha.action.assert_awaited_once_with({'action':'light.turn_off','target':{'area_id':'kitchen'},'data':{}})
@@ -138,7 +155,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         self.ha.states.update({'scene.relax':'2026-01-01', 'climate.kitchen':'heat', 'climate.kitchen#current_temperature':'21.5', 'climate.kitchen#temperature':'22', 'climate.kitchen#min_temp':'7', 'climate.kitchen#max_temp':'30'})
         record = self.service.store.change(doc['id'],'save',request(document=doc))
         record = self.service.store.change(doc['id'],'publish',request(record))
-        path='/dashboards/api/published/'+doc['id']+'/actions'
+        path='/api/v1/dashboard-display/published/'+doc['id']+'/actions'
         def payload(c, **extra): return dict(componentID=c['id'],revision=record['revision'],requestID=uid(),**extra)
         self.assertEqual((await self.client.post(path,json=payload(climate,temperature=31),headers=self.headers)).status,422)
         self.assertEqual((await self.client.post(path,json=payload(scene,on=False),headers=self.headers)).status,422)
@@ -156,7 +173,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         record=self.service.store.change(doc['id'],'publish',request(record))
         self.runtime.running[program]=True
         self.runtime.snapshots[program]={'observedAt':time.time(),'analogSignals':{block:30}}
-        path='/dashboards/api/published/'+doc['id']+'/actions'
+        path='/api/v1/dashboard-display/published/'+doc['id']+'/actions'
         payload=dict(componentID=c['id'],revision=record['revision'],requestID=uid(),on=True)
         await self.client.post(path,json=payload,headers=self.headers)
         self.ha.action.assert_awaited_once_with({'action':'light.turn_on','target':{'entity_id':'light.kitchen'},'data':{'brightness_pct':30}})
@@ -201,11 +218,8 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         c=self.doc['pages'][0]['components'][1]
         response=await self.client.get(self.path+'/camera/'+c['id']+'?revision=stale')
         self.assertEqual(response.status,409)
-    async def test_shared_renderer_and_page_do_not_expose_keys(self):
-        response=await self.client.get('/dashboards/');html=await response.text()
-        self.assertEqual(response.status,200)
-        for secret in ['never-in-browser','supervisor-secret','secret-camera-token']:self.assertNotIn(secret,html)
-        self.assertIn("img-src 'self' data:",response.headers['Content-Security-Policy'])
+    async def test_runtime_has_no_dashboard_page_and_renderer_matches(self):
+        self.assertEqual((await self.client.get('/dashboards/')).status,404)
         root=Path(__file__).parents[2]
         shared = root/'Sources/NodivraDashboard/Resources'
         if not shared.exists(): shared = Path(__file__).resolve().parents[1]/'nodivra_dashboards/server/dashboard_web'

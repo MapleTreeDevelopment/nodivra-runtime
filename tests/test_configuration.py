@@ -55,11 +55,12 @@ class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(first['key']), 64); self.assertNotEqual(first, second)
         self.assertEqual(self.writes, 0); self.assertEqual(self.runtime.key, '')
 
-    async def test_navigation_keeps_dashboards_and_settings_directly_reachable(self):
+    async def test_navigation_contains_only_automations_and_runtime(self):
         for view in ['automations', 'runtime']:
             page = await (await self.client.get('/?view='+view)).text()
             self.assertIn('data-page="'+view+'"', page)
-            self.assertIn('href="./dashboards/"', page)
+            self.assertNotIn('href="./dashboards/"', page)
+            self.assertEqual((await self.client.get("/dashboards/")).status,404)
             self.assertIn('href="./?view='+view+'" aria-current="page"', page)
             self.assertNotIn('__NAV', page)
         page = await (await self.client.get('/?view=%3Cscript%3E')).text()

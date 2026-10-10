@@ -1,3 +1,8 @@
+## 0.3.0
+
+- Wetterkarten in drei Designs, mit optionalem Zustand, Luftfeuchtigkeit und Wind.
+- Benötigt Runtime 0.12.0 für Wetterdaten.
+
 ## 0.2.0
 
 - Vier auswählbare Dashboard-Designs: Schiefer, Wolke, Sand und Nacht, jeweils mit Hell-/Dunkel-Darstellung.

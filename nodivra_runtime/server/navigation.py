@@ -13,7 +13,7 @@ def navigation(current, prefix="./"):
     return ('<aside class="tool-sidebar"><div class="tool-brand"><span class="tool-brand-mark" aria-hidden="true">'
             '<svg viewBox="0 0 24 24" preserveAspectRatio="none" aria-hidden="true"><path d="M12 1 23 9.5h-3V23h-6.5v-8h-3v8H4V9.5H1Z"/></svg></span>'
             '<div><strong>Nodivra</strong><small>Dein Zuhause</small></div></div><nav aria-label="Nodivra Navigation">'
-            + link("dashboards", "Dashboards", "dashboards/") + link("automations", "Automationen", "?view=automations")
+            + link("automations", "Automationen", "?view=automations")
             + '</nav><nav id="dashboard-page-nav" aria-label="Dashboard-Seiten" hidden></nav><nav class="tool-settings" aria-label="Runtime-Einstellungen">'
             + link("runtime", "Runtime", "?view=runtime") + '</nav></aside>')
 

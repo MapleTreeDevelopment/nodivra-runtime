@@ -13,7 +13,6 @@ import threading
 import time
 import uuid
 from aiohttp import web, ClientTimeout, ClientError
-from navigation import navigation, navigation_style
 
 MAX_DOCUMENT = 4 * 1024 * 1024
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -64,9 +63,13 @@ def validate(document, complete=False):
         require(isinstance(page.get("components"), list)); count += len(page["components"]); require(count <= 200, "Maximal 200 Komponenten pro Dashboard.")
         for c in page["components"]:
             require(isinstance(c, dict)); identity = identifier(c.get("id")); require(identity not in ids); ids.add(identity)
-            require(c.get("kind") in ("light", "climate", "scene", "switch", "value", "text", "image", "camera", "graph"))
+            require(c.get("kind") in ("weather", "light", "climate", "scene", "switch", "value", "text", "image", "camera", "graph"))
             require(text(c.get("title")) and text(c.get("text"), 10000) and text(c.get("unit"), 32) and text(c.get("assetID"), 36))
             require(c.get("effect", "none") in ("none", "glow", "pulse") and type(c.get("animated", True)) is bool and c.get("cameraMode", "stream") in ("stream", "snapshots"))
+            if "weather" in c:
+                weather = c["weather"]
+                require(isinstance(weather, dict) and weather.get("style") in ("minimal", "compact", "detail"))
+                require(all(type(weather.get(key)) is bool for key in ("showCondition", "showHumidity", "showWind")))
             require("showTitle" not in c or type(c["showTitle"]) is bool)
             require(isinstance(c.get("layouts"), dict))
             for size, cols in (("desktop", 12), ("tablet", 8), ("mobile", 4)):
@@ -92,7 +95,7 @@ def validate(document, complete=False):
                     else:
                         identifier(b["programID"]); identifier(b["blockID"])
                         require(b["metric"] in ("signal", "number", "remaining"))
-                if c["kind"] in ("scene", "climate"): require(b["source"] == "entity" and b["entityID"].startswith(c["kind"]+".") and not b["attribute"], "Ungültiges Ziel.")
+                if c["kind"] in ("scene", "climate", "weather"): require(b["source"] == "entity" and b["entityID"].startswith(c["kind"]+".") and not b["attribute"], "Ungültiges Ziel.")
                 if c["kind"] == "camera": require(b["source"] == "entity" and b["entityID"].startswith("camera.") and not b["attribute"], c["title"] + ": Kamera-Entität fehlt.")
                 if c["kind"] in ("light", "switch"):
                     domains = ("light",) if c["kind"] == "light" else ("light", "switch", "input_boolean")
@@ -213,14 +216,6 @@ class DashboardService:
         app.router.add_get(prefix+"/published/{id}/camera/{component}", self.camera)
     async def display_status(self, request):
         return web.json_response({"serverID": self.runtime.server_id, "version": self.runtime.version, "protocolVersion": 1, "connected": self.runtime.ha.connected})
-    def ingress_routes(self, app, csrf):
-        self.csrf = csrf
-        app.router.add_get("/dashboards/", self.page)
-        app.router.add_get("/dashboards/api/published", self.list_published)
-        app.router.add_get("/dashboards/api/published/{id}", self.get_published)
-        app.router.add_get("/dashboards/api/published/{id}/values", self.live_values)
-        app.router.add_post("/dashboards/api/published/{id}/actions", self.action)
-        app.router.add_get("/dashboards/api/published/{id}/camera/{component}", self.camera)
     async def list_documents(self, request):
         records = await self.call(self.store.read)
         return web.json_response({"dashboards": [dict(id=r["id"],title=r["document"]["title"],publishedRevision=r["publishedRevision"],updated=r["updated"]) for r in records]})
@@ -248,11 +243,6 @@ class DashboardService:
                 values[c["id"]].update(known=False, reason="Kamerabild nicht verfügbar")
         await asyncio.gather(*(snapshot(c) for c in cameras))
         return web.json_response({"values": values, "connected": self.runtime.ha.connected})
-    async def page(self, request):
-        folder = Path(__file__).with_name("dashboard_web")
-        css = (folder/"renderer.css").read_text(); js = (folder/"renderer.js").read_text()
-        html = "<!doctype html><html lang='de'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Nodivra Dashboards</title><style nonce='"+self.csrf+"'>"+css+navigation_style()+"</style></head><body class='tool-layout'>"+navigation("dashboards", "../")+"<main id='dashboard'></main><script nonce='"+self.csrf+"'>"+js+"\nNodivra.boot("+canonical({"mode":"viewer","csrf":self.csrf})+");</script></body></html>"
-        return web.Response(text=html, content_type="text/html")
     async def list_published(self, request):
         records = await self.call(self.store.read); items = []
         for record in records:
@@ -293,6 +283,16 @@ class DashboardService:
                     state = self.runtime.ha.states.get(b["entityID"])
                     if state not in (None, "unknown", "unavailable"):
                         value = self.runtime.ha.states.get(b["entityID"] + ("#"+b["attribute"] if b["attribute"] else ""))
+                        if c["kind"] == "weather":
+                            for attribute in ("temperature", "humidity", "wind_speed"):
+                                candidate = self.runtime.ha.states.get(b["entityID"]+"#"+attribute)
+                                try:
+                                    numeric = float(candidate) if type(candidate) in (int, float, str) else float("nan")
+                                    if math.isfinite(numeric): extra[attribute] = numeric
+                                except (ValueError, OverflowError): pass
+                            for attribute in ("temperature_unit", "wind_speed_unit"):
+                                candidate = self.runtime.ha.states.get(b["entityID"]+"#"+attribute)
+                                if isinstance(candidate, str) and len(candidate) <= 16: extra[attribute] = candidate
                         if c["kind"] == "climate":
                             for source, target in (("current_temperature", "temperature"), ("temperature", "targetTemperature"), ("min_temp", "minTemperature"), ("max_temp", "maxTemperature"), ("target_temp_step", "temperatureStep")):
                                 candidate = self.runtime.ha.states.get(b["entityID"]+"#"+source)

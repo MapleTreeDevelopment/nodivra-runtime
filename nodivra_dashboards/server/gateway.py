@@ -10,7 +10,7 @@ from browser_access import BrowserAccess
 from pathlib import Path
 from aiohttp import web, ClientSession, ClientTimeout, ClientError
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 MAX_RESPONSE = 8 * 1024 * 1024
 
 
@@ -95,7 +95,7 @@ class DashboardGateway:
         body = """<aside class="tool-sidebar"><div class="tool-brand"><span class="tool-brand-mark"><svg viewBox="0 0 24 24" preserveAspectRatio="none" aria-hidden="true"><path d="M12 1 23 9.5h-3V23h-6.5v-8h-3v8H4V9.5H1Z"/></svg></span><div><strong>Nodivra</strong><small>Dashboards</small></div></div>
         <nav aria-label="Nodivra Navigation"><a class="tool-link" href="./" aria-current="page">Dashboards</a></nav>
         <nav id="dashboard-page-nav" aria-label="Dashboard-Seiten" hidden></nav>
-        <nav class="tool-settings"><span class="tool-link">Webdienst 0.2.0 · Gemeinsame Runtime</span></nav></aside><main id="dashboard"></main>"""
+        <nav class="tool-settings"><span class="tool-link">Webdienst 0.3.0 · Gemeinsame Runtime</span></nav></aside><main id="dashboard"></main>"""
         controls = ""
         if request.get('browser_user'):
             controls = '<button id="browser-logout" class="dash-link">Browser abmelden</button>'

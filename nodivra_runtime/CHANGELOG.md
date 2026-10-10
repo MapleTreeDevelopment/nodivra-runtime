@@ -1,3 +1,10 @@
+## 0.12.0
+
+- Dashboard-Oberfläche ausschließlich in der separaten App „Nodivra Dashboards“. Gemeinsame Daten bleiben erhalten.
+
+- Wetterkarten mit aktuellen Wetterdaten, Einheiten und klaren Verfügbarkeitszuständen.
+- Drei Darstellungen: Minimal, Kompakt und Detail; benötigt Nodivra Dashboards 0.3.0.
+
 ## 0.11.0
 
 - Vier auswählbare Dashboard-Designs: Schiefer, Wolke, Sand und Nacht, jeweils mit Hell-/Dunkel-Darstellung.

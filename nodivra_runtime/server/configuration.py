@@ -56,11 +56,8 @@ class RuntimeConfiguration:
             response.headers.update({"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
                 "X-Content-Type-Options": "nosniff",
                 "Content-Security-Policy": "default-src 'none'; script-src 'nonce-" + self.csrf + "'; style-src 'nonce-" + self.csrf + "'; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'"})
-            if request.path.startswith("/dashboards/"):
-                response.headers["Content-Security-Policy"] = "default-src 'none'; script-src 'nonce-" + self.csrf + "'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'"
             return response
         app = web.Application(middlewares=[boundary], client_max_size=8192)
-        if hasattr(self.runtime, "dashboards"): self.runtime.dashboards.ingress_routes(app, self.csrf)
         app.router.add_get("/", self.page)
         app.router.add_get("/status", self.status)
         app.router.add_get("/dashboard", self.dashboard)

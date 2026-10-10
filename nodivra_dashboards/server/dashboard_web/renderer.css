@@ -74,3 +74,13 @@
 :root[data-palette=sand] { --bg:light-dark(#f4eee4,#24211d); --panel:light-dark(#fffcf5,#33302a); --text:light-dark(#3c3024,#f6eddf); --muted:light-dark(#75644f,#c0b09a); --line:light-dark(#ddd0bd,#504637); }
 :root[data-palette=midnight] { --bg:light-dark(#eef1f8,#111622); --panel:light-dark(#fbfcff,#202b40); --text:light-dark(#202d49,#edf1ff); --muted:light-dark(#5c6d8b,#a4b4d4); --line:light-dark(#d7def0,#354765); }
 :root[data-palette=cloud] .chart-line,:root[data-palette=sand] .chart-line,:root[data-palette=midnight] .chart-line { stroke:var(--accent); }
+
+/* Weather variants share live data and never invent missing measurements. */
+.dash-widget[data-kind="weather"]{justify-content:center;gap:10px;overflow:auto}
+.weather-condition{font-size:.9rem;color:var(--muted)}
+.dash-widget[data-kind="weather"] .widget-value{font-size:2.3rem;font-weight:300;line-height:1.15}
+.weather-details{font-size:.8rem;color:var(--muted);line-height:1.8}
+.dash-widget[data-weather="minimal"]{background:transparent;box-shadow:none;border-color:transparent}
+.dash-widget[data-weather="compact"] .widget-value{font-size:1.8rem}
+.dash-widget[data-weather="detail"]{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 12%,var(--panel)),var(--panel))}
+.dash-widget[data-weather="detail"] .weather-details{border-top:1px solid var(--line);padding-top:10px}

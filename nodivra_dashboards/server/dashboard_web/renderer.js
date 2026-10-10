@@ -6,7 +6,7 @@
   const nodes=new Map(), inflight=new Set(), histories=new Map(), pausedCameras=new Set();
   let cameraTimer=null; const reduceMotion=matchMedia("(prefers-reduced-motion: reduce)");
   const columns={desktop:12,tablet:8,mobile:4};
-  const defaultTitles={climate:'Raumklima',scene:'Szene',text:'Text',camera:'Kamera',image:'Bild',graph:'Livegraph',value:'Wertanzeige',light:'Licht',switch:'Schalter'};
+  const defaultTitles={weather:'Wetter',climate:'Raumklima',scene:'Szene',text:'Text',camera:'Kamera',image:'Bild',graph:'Livegraph',value:'Wertanzeige',light:'Licht',switch:'Schalter'};
   const icons={light:'M9 18h6M10 21h4M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 2H9s0-1-1-2',switch:'M12 3v9M7 5a8 8 0 1 0 10 0',camera:'M3 5h12v14H3zM15 10l6-4v12l-6-4',graph:'M3 3v18h18M5 16l4-5 4 2 7-9',value:'M4 9h16M3 15h16M10 3 8 21M17 3l-2 18',text:'M4 5h16M12 5v15M8 20h8',image:'M3 3h18v18H3zM3 17l6-6 4 4 3-3 5 5'};
   function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;}
   function bridge(message){window.webkit?.messageHandlers?.dashboard?.postMessage(message);}
@@ -32,7 +32,8 @@
       const asset=documentModel.assets.find(a=>a.id===c.assetID);
       if(asset&&c.kind!=='image'&&c.kind!=='camera'){const photo=el('img','widget-backdrop');photo.alt='';photo.src=`data:${asset.mime};base64,${asset.data}`;card.prepend(photo);card.classList.add('has-backdrop');}
       const value=el('div','widget-value'),feedback=el('div','widget-feedback');feedback.setAttribute('aria-live','polite');
-      if(c.kind==='text')card.append(el('div','widget-text',c.text));
+      if(c.kind==='weather'){card.dataset.weather=c.weather?.style||'minimal';card.append(el('div','weather-condition'),value,el('div','weather-details'));}
+      else if(c.kind==='text')card.append(el('div','widget-text',c.text));
       else if(c.kind==='image'){const a=documentModel.assets.find(a=>a.id===c.assetID);if(a){const img=el('img','widget-image');img.alt=c.title;img.src=`data:${a.mime};base64,${a.data}`;card.append(img);}else card.append(el('div','widget-text','Bild auswählen'));}
       else if(c.kind==='camera'){const img=el('img','widget-image widget-camera');img.alt=c.title;card.append(img);card.append(value);if(options.mode==='viewer'){const pause=el('button','camera-pause','Livebild pausieren');pause.onclick=()=>{pausedCameras.has(c.id)?pausedCameras.delete(c.id):pausedCameras.add(c.id);cameraTick();};card.append(pause);}}
       else if(c.kind==='graph'){card.append(value);const chart=document.createElementNS('http://www.w3.org/2000/svg','svg');chart.classList.add('widget-chart');chart.setAttribute('viewBox','0 0 320 100');chart.setAttribute('preserveAspectRatio','none');chart.setAttribute('role','img');chart.setAttribute('aria-label',c.title+' · Liveverlauf');const path=document.createElementNS(chart.namespaceURI,'path');path.classList.add('chart-line');chart.append(path);card.append(chart,el('small','chart-caption','Liveverlauf seit dem Öffnen'));}
@@ -88,6 +89,7 @@
       if(known&&n.c.kind==='scene')text='Bereit';
       if(n.c.kind==='camera'){text=known?(options.mode==='editor'?'Vorschau · Einzelbilder':n.cameraReady?(n.c.cameraMode==='snapshots'?'Livebilder · alle 2 Sekunden':'Live · MJPEG'):'Livebild wird geladen …'):(v?.reason||'Kamera nicht verfügbar');if(n.camera&&options.mode==='editor'){if(v?.image){if(n.camera.src!==v.image)n.camera.src=v.image;}else n.camera.removeAttribute('src');}}
       if(n.cameraError&&n.c.kind==='camera')text='Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen';
+      if(n.c.kind==='weather'){weather(n,v);continue;}
       if(n.value.textContent!==text)n.value.textContent=text;
       n.card.classList.toggle('is-active',known&&(v.value==='on'||v.value===true||n.c.kind==='camera'||n.c.kind==='graph'));
       for(const control of n.controls){control.disabled=options.mode!=='viewer'||!known||inflight.has(id);if(control.tagName==='BUTTON')control.classList.toggle('active',known&&((v.value==='on'||v.value===true)===(control.dataset.on==='true')));if(control.type==='range'&&document.activeElement!==control&&v?.brightness!==undefined)control.value=v.brightness;
@@ -96,6 +98,21 @@
       if(n.graph)graph(n,v);
     }
     cameraTick();
+  }
+  function weather(n,v){
+    const labels={'clear-night':'Klare Nacht',cloudy:'Bewölkt',exceptional:'Außergewöhnliches Wetter',fog:'Nebel',hail:'Hagel',lightning:'Gewitter','lightning-rainy':'Gewitter mit Regen',partlycloudy:'Teilweise bewölkt',pouring:'Starkregen',rainy:'Regen',snowy:'Schnee','snowy-rainy':'Schneeregen',sunny:'Sonnig',windy:'Windig','windy-variant':'Windig und bewölkt'};
+    const known=v?.known===true, o=n.c.weather||{}, format=x=>new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(x);
+    const temperature=known&&Number.isFinite(v.temperature)?format(v.temperature)+(v.temperature_unit?' '+v.temperature_unit:' · Einheit fehlt'):'—';
+    const condition=n.card.querySelector('.weather-condition'), details=n.card.querySelector('.weather-details');
+    n.value.textContent=temperature;
+    condition.hidden=o.showCondition===false&&known;
+    condition.textContent=known?(labels[v.value]||String(v.value)):(v?.reason||'Wetter nicht verfügbar');
+    const parts=[];
+    if((o.style||'minimal')!=='minimal'){
+      if(o.showHumidity!==false)parts.push('Luftfeuchtigkeit '+(known&&Number.isFinite(v.humidity)?format(v.humidity)+' %':'—'));
+      if(o.showWind!==false)parts.push('Wind '+(known&&Number.isFinite(v.wind_speed)?format(v.wind_speed)+(v.wind_speed_unit?' '+v.wind_speed_unit:' · Einheit fehlt'):'—'));
+    }
+    details.textContent=parts.join(' · ');details.hidden=!parts.length;
   }
   function graph(n,v){
     if(!v||!Number.isFinite(v.observedAt))return;
