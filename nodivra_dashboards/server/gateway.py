@@ -10,7 +10,7 @@ from browser_access import BrowserAccess
 from pathlib import Path
 from aiohttp import web, ClientSession, ClientTimeout, ClientError
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 MAX_RESPONSE = 8 * 1024 * 1024
 
 

@@ -1,4 +1,4 @@
-# Dashboard Designer · Mac 0.20 / Runtime 0.9
+# Dashboard Designer · Mac 0.27 / Runtime 0.15 / Dashboards 0.6
 
 Ein eigenständiges Toolbox-Werkzeug mit eigener Dashboard-Darstellung. Es verändert keine Lovelace-Konfiguration und erstellt keine HA-Automationen.
 
@@ -7,6 +7,20 @@ Ein eigenständiges Toolbox-Werkzeug mit eigener Dashboard-Darstellung. Es verä
 In der Werkzeugauswahl **Dashboard Designer** öffnen und ein Dashboard erstellen. Links Seiten und Komponenten wählen, in der Mitte platzieren und an der unteren rechten Ecke skalieren. Rechts stehen Bezeichnung, Datenquelle und Eigenschaften. Handy (4 Spalten), Tablet (8) und Desktop (12) besitzen eigene Rasterpositionen. Bei Änderungen an einer Ansicht bleiben die anderen erhalten. Über Dashboard-Einstellungen lassen sich System-/runde-/Serifenschrift, Schriftgröße, Farben, Abstände, Rundungen und Hell/Dunkel wählen. Rückgängig/Wiederholen und lokale Sicherung sind vorhanden.
 
 Die Mac-Vorschau zeigt dieselbe Web-Komponente wie das fertige Dashboard. Sie liest Werte; ihre Gerätebedienung ist gesperrt. Designer-Dokumente werden separat von Automationsentwürfen gespeichert. Das Original einer nicht lesbaren lokalen Datei wird nicht überschrieben.
+
+## Freie Karteninhalte, Rahmen und Gruppen
+
+Eine Karte auswählen, rechts **Design → Inhalt anordnen** öffnen und **Inhalte auf der Karte verschieben** einschalten. Alternativ oben über der Vorschau zwischen Karten- und Inhaltsbearbeitung wechseln. Werte, Titel, Wettertexte, Symbole, Diagramme, Bilder und die vorhandenen Bedienelemente lassen sich innerhalb der Karte ziehen. Beim ersten Ziehen werden die übrigen sichtbaren Inhalte an ihrer bisherigen Position fixiert. Ein/Aus wird als gemeinsame Schaltleiste bewegt; der Helligkeitsregler lässt sich getrennt positionieren.
+
+Unter **Element** werden Sichtbarkeit, automatische/freie Anordnung, X/Y, Breite/Höhe in Prozent, Ausrichtung und Schriftgröße eingestellt. Schriftgröße 0 verwendet den Kartenstil. Einheiten am Wert lassen sich separat ausblenden. Alle Inhaltspositionen und deren Sichtbarkeit gelten für die ausgewählte Geräteansicht; **Inhalt für diese Ansicht zurücksetzen** stellt die automatische Anordnung wieder her. Rückmeldungen zu Geräteaktionen bleiben sichtbar und sind nicht als dekorativer Inhalt ausblendbar.
+
+**Rahmen & Fläche** bietet durchgezogene, gestrichelte, gepunktete, doppelte oder keine Rahmen, 0–8 px Stärke, Rundung, semantische Designfarben und transparente/dezente/Kartenflächen. Die Stilvorgabe lässt sich wiederherstellen.
+
+**Gruppe** aus der Komponentenliste hinzufügen, ausreichend vergrößern und Karten vollständig hineinziehen. Die Gruppe wird beim passenden Ziehziel hervorgehoben. Mitglieder bewegen sich gemeinsam; zu kleines Verkleinern wird verhindert. Gruppenzuordnung ist je Geräteansicht getrennt. Gruppen werden nicht verschachtelt. **Aus Gruppe lösen** löst die Zuordnung, und das Entfernen einer Gruppe erhält ihre Karten. Die Kopie einer Geräteanordnung übernimmt Gruppen samt Mitgliedern und passt deren horizontale Proportionen an.
+
+**Linie / Trenner** lässt sich horizontal oder vertikal ausrichten und mit den Rahmenoptionen gestalten. **Abstand** reserviert eine freie Rasterfläche und ist im fertigen Dashboard unsichtbar.
+
+Diese Funktionen benötigen die oben genannten neuen App-/Runtime-/Dashboard-Versionen. Ältere Dashboards behalten ohne neue Einstellungen ihr automatisches Layout.
 
 ## Komponenten
 

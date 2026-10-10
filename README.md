@@ -1,13 +1,13 @@
-# Nodivra Runtime 0.14.0 und Nodivra Dashboards 0.5.0
+# Nodivra Runtime 0.15.0 und Nodivra Dashboards 0.6.0
 
 ## Neu in diesen Versionen
 
-- Gemeinsame Kartenstile, 37 Symbolmotive, Wetteranimationen und bis zu acht Zustands-/Schwellwertregeln je Karte. Farben und Effekte folgen dem Dashboard-Design.
-- Mobile Darstellung und einklappbare Navigation, optionales Logo pro Seite; das Menü bleibt erreichbar.
-- Alle deaktivierten oder ausgewählte Automationen gesammelt aktivieren, mit Einzelmeldungen bei Fehlern.
-- Update-Auswahl zum einmaligen Fortsetzen zuvor aktiver Automationen. Diese Auswahl benötigt Runtime 0.14.0 als Ausgangsversion und steht danach für weitere Updates bereit. Beim ersten Upgrade gelten die bisherigen Neustartregeln.
+- Inhalte innerhalb einer Karte positionieren: Werte, Texte, Symbole, Medien, Schaltflächen und Regler. Sichtbarkeit, Ausrichtung und Schriftgröße lassen sich je Geräteansicht einstellen.
+- Rahmen mit unterschiedlichen Linienarten, Breiten, Rundungen und Farben aus dem gewählten Design.
+- Leere Gruppen zum Zusammenfassen und gemeinsamen Verschieben von Karten, dazu horizontale/vertikale Linien und Abstandhalter. Gruppen bleiben einstufig; beim Entfernen bleiben ihre Karten erhalten.
+- Desktop, Tablet und Handy behalten unabhängige Anordnungen. Vorschau und veröffentlichtes Dashboard verwenden dieselbe Darstellung.
 
-Vor dem Update eine vollständige HA-Sicherung erstellen. Zuerst Runtime 0.14.0, danach Nodivra Dashboards 0.5.0 aktualisieren. Die neuen Designoptionen werden mit Nodivra für Mac 0.26.0 eingestellt.
+Vor dem Update eine vollständige HA-Sicherung erstellen. Zuerst Runtime 0.15.0, danach Nodivra Dashboards 0.6.0 aktualisieren. Die neuen Gestaltungsoptionen werden mit Nodivra für Mac 0.27.0 eingestellt. Die bereits seit Runtime 0.14.0 verfügbare Update-Auswahl kann zuvor aktive Automationen nach dem Update einmalig fortsetzen; manuell pausierte bleiben pausiert.
 
 [Entity-Abdeckung und Darstellungsgrenzen](docs/DASHBOARD-ENTITY-COVERAGE.md)
 
@@ -15,7 +15,7 @@ Vor dem Update eine vollständige HA-Sicherung erstellen. Zuerst Runtime 0.14.0,
 
 **Nodivra Dashboards** ist eine zusätzliche Home-Assistant-App mit eigenem Webdienst und Seitenleisteneintrag. Die gemeinsame Runtime speichert weiterhin alle Entwürfe, veröffentlichten Dashboards und Versionen und übernimmt Geräteaktionen. Ein Update des Webdienstes benötigt keinen Neustart der Automationsengine. Dashboards werden ausschließlich über Nodivra Dashboards geöffnet; die Runtime-Oberfläche verwaltet Automationen und Einstellungen.
 
-Nach einer vollständigen HA-Sicherung die Runtime auf 0.14.0 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.5.0** installieren. In der Mac-App **Nodivra 0.23 → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
+Nach einer vollständigen HA-Sicherung die Runtime auf 0.15.0 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.6.0** installieren. In der Mac-App **Nodivra 0.23 → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
 
 Der zusätzliche Dienst hat standardmäßig keinen freigegebenen LAN-Port, keine eigene Automationsengine und keine Supervisor-Verwaltungsrechte. Zugriff erfolgt über HA Ingress mit einem Administratorkonto; optional ist eine eigene Browser-Seite für gekoppelte Browser verfügbar. Der Browser erhält keine Runtime-Zugangsschlüssel. Vorhandene Dashboard-Daten müssen weder kopiert noch erneut veröffentlicht werden.
 
@@ -55,7 +55,7 @@ Die Sicherung liegt zunächst auf dem HA-Datenträger. Unter Einstellungen → S
 ## Manueller Ersatzweg nach Freigabe des HA-OS-Updates
 
 1. Vollständige HA-Sicherung erstellen und herunterladen. Bei einer VM zusätzlich einen Snapshot des ausgeschalteten Systems anlegen, bevor das Betriebssystem verändert wird.
-2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.11.0.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
+2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.15.0.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
 3. Auf einer von Supervisor unterstützten HA-OS-Version den App-Store neu laden. Nodivra Runtime erscheint unter den lokalen Apps. Installieren. Der erste Build lädt offizielle Swift-/Python-Abhängigkeiten und benötigt Zeit und freien Speicher. Die Architektur wird vom Build gewählt.
 4. Runtime starten und **Weboberfläche öffnen** wählen. Unter **Zugang & Einstellungen** dort **Schlüssel generieren** und **Schlüssel speichern & verwenden** anklicken. 64 zufällige Zeichen werden erzeugt und in den HA-App-Optionen gespeichert; ein bisheriger gültiger Schlüssel wird erst nach Bestätigung ersetzt. Der Schlüssel lässt sich verborgen halten und kopieren. Ohne gültigen Schlüssel bleibt die externe Runtime-API gesperrt, die Einrichtung ist erreichbar.
 5. Auf dem Mac Runtime-Adresse `http://homeassistant.local:8668` und denselben Schlüssel eintragen. Lokales HTTP muss ausdrücklich erlaubt werden. Schlüssel und Programme laufen bei HTTP unverschlüsselt über das lokale Netz; Port 8668 nicht öffentlich freigeben. Die aktuelle Runtime terminiert selbst kein TLS.

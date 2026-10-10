@@ -1,5 +1,5 @@
 name: Nodivra Dashboards
-version: "0.5.0"
+version: "0.6.0"
 slug: nodivra_dashboards
 description: Eigener Dashboard-Webdienst mit zentralen Daten aus der Nodivra Runtime.
 arch:

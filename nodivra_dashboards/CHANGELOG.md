@@ -1,3 +1,9 @@
+## 0.6.0
+
+- Freie Inhaltspositionen, Sichtbarkeit, Ausrichtung und Schriftgröße je Geräteansicht.
+- Gestaltbare Rahmen und Flächen, Linien/Trenner, Abstandselemente und Gruppen zum gemeinsamen Verschieben.
+- Gruppen und Inhaltslayout werden zentral gespeichert und mit der gemeinsamen Darstellung wiedergegeben.
+
 ## 0.5.0
 
 - Gemeinsame, palettenabhängige SVG-Symbole und dezente Wetter-/Zustandsanimationen.

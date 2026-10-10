@@ -8,7 +8,7 @@
   const visibility=new IntersectionObserver(entries=>{for(const e of entries)e.target.classList.toggle('motion-paused',!e.isIntersecting);});
   document.addEventListener('visibilitychange',()=>document.documentElement.classList.toggle('document-hidden',document.hidden));
   const columns={desktop:12,tablet:8,mobile:4};
-  const defaultTitles={weather:'Wetter',climate:'Raumklima',scene:'Szene',text:'Text',camera:'Kamera',image:'Bild',graph:'Livegraph',value:'Wertanzeige',light:'Licht',switch:'Schalter'};
+  const defaultTitles={weather:'Wetter',climate:'Raumklima',scene:'Szene',text:'Text',camera:'Kamera',image:'Bild',graph:'Livegraph',value:'Wertanzeige',line:'Linie / Trenner',group:'Gruppe',spacer:'Abstand',light:'Licht',switch:'Schalter'};
   const icons={light:'M9 18h6M10 21h4M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 2H9s0-1-1-2',switch:'M12 3v9M7 5a8 8 0 1 0 10 0',camera:'M3 5h12v14H3zM15 10l6-4v12l-6-4',graph:'M3 3v18h18M5 16l4-5 4 2 7-9',value:'M4 9h16M3 15h16M10 3 8 21M17 3l-2 18',text:'M4 5h16M12 5v15M8 20h8',image:'M3 3h18v18H3zM3 17l6-6 4 4 3-3 5 5'};
   function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;}
   function bridge(message){window.webkit?.messageHandlers?.dashboard?.postMessage(message);}
@@ -65,7 +65,7 @@
   }
   const classSymbols={glass_break:'window',moving:'motion',update:'warning',door:'door',window:'window',garage_door:'garage',opening:'door',lock:'lock',temperature:'temperature',humidity:'humidity',moisture:'water',water:'water',battery:'battery',battery_charging:'battery',motion:'motion',occupancy:'presence',presence:'presence',smoke:'smoke',gas:'smoke',carbon_monoxide:'smoke',safety:'shield',tamper:'shield',problem:'warning',power:'power',energy:'power',current:'power',voltage:'power',illuminance:'sun',light:'light',wind_speed:'wind',wind_direction:'wind',sound:'music',vibration:'bell',connectivity:'plug',plug:'plug',running:'fan',heat:'temperature',cold:'temperature',duration:'clock',timestamp:'clock',date:'calendar'};
   const domainSymbols={light:'light',switch:'plug',input_boolean:'plug',climate:'temperature',water_heater:'temperature',humidifier:'humidity',fan:'fan',cover:'blind',lock:'lock',person:'presence',device_tracker:'presence',media_player:'music',vacuum:'vacuum',lawn_mower:'leaf',alarm_control_panel:'shield',siren:'bell',camera:'camera',calendar:'calendar',date:'calendar',datetime:'clock',time:'clock',timer:'clock',event:'bell',button:'power',input_button:'power',scene:'light',automation:'power',script:'power',update:'warning',valve:'water',sensor:'power',binary_sensor:'shield',number:'power',input_number:'power',select:'power',input_select:'power',text:'power',input_text:'power',counter:'power',todo:'calendar',remote:'power',image:'camera',sun:'sun'};
-  function autoSymbol(c,v){if(c.kind==='weather')return v?.known?weatherSymbols[v.value]||'warning':'warning';return classSymbols[v?.deviceClass]||domainSymbols[(c.binding.entityID||'').split('.')[0]]||(['text','image'].includes(c.kind)?'none':c.kind==='graph'?'power':c.kind==='camera'?'camera':'power');}
+  function autoSymbol(c,v){if(c.kind==='weather')return v?.known?weatherSymbols[v.value]||'warning':'warning';return classSymbols[v?.deviceClass]||domainSymbols[(c.binding.entityID||'').split('.')[0]]||(['text','image','line','group','spacer'].includes(c.kind)?'none':c.kind==='graph'?'power':c.kind==='camera'?'camera':'power');}
   function numeric(value){if(typeof value==='number')return Number.isFinite(value)?value:null;if(typeof value!=='string'||!value.trim())return null;const n=Number(value.trim().replace(',','.'));return Number.isFinite(n)?n:null;}
   function matches(rule,value){if(rule.comparison==='eq'||rule.comparison==='neq'){const same=String(value).toLowerCase()===rule.value.toLowerCase();return rule.comparison==='eq'?same:!same;}const a=numeric(value),b=numeric(rule.value);if(a===null||b===null)return false;return {gt:a>b,gte:a>=b,lt:a<b,lte:a<=b}[rule.comparison]===true;}
   function activeValue(c,v){return v?.known===true&&(v.value===true||['on','open','opening','unlocked','playing','cleaning','home','detected','heating','cooling'].includes(v.value)||c.kind==='weather'||c.kind==='camera');}
@@ -119,6 +119,8 @@
       const symbol=el('div','state-symbol');symbol.hidden=true;card.append(symbol);
       const value=el('div','widget-value'),feedback=el('div','widget-feedback');feedback.setAttribute('aria-live','polite');
       if(c.kind==='weather'){card.dataset.weather=cardStyle(c);card.append(el('div','weather-condition'),value,el('div','weather-details'));}
+      else if(c.kind==='line'){const line=el('div','decoration-line');line.dataset.direction=c.lineDirection||'horizontal';card.append(line);}
+      else if(c.kind==='group'||c.kind==='spacer'){}
       else if(c.kind==='text')card.append(el('div','widget-text',c.text));
       else if(c.kind==='image'){const a=documentModel.assets.find(a=>a.id===c.assetID);if(a){const img=el('img','widget-image');img.alt=c.title;img.src=`data:${a.mime};base64,${a.data}`;card.append(img);}else card.append(el('div','widget-text','Bild auswählen'));}
       else if(c.kind==='camera'){const img=el('img','widget-image widget-camera');img.alt=c.title;card.append(img);card.append(value);if(options.mode==='viewer'){const pause=el('button','camera-pause','Livebild pausieren');pause.onclick=()=>{pausedCameras.has(c.id)?pausedCameras.delete(c.id):pausedCameras.add(c.id);cameraTick();};card.append(pause);}}
@@ -132,21 +134,53 @@
       }
       if(c.kind==='light'||c.kind==='switch'){
         const actions=el('div','widget-actions');for(const on of [true,false]){const b=el('button','',on?'Ein':'Aus');b.dataset.on=String(on);b.onclick=()=>act(c,{on});controls.push(b);actions.append(b);}card.append(actions);
-        if(c.kind==='light'&&!c.brightnessBinding){const slider=el('input','widget-slider');slider.type='range';slider.min='1';slider.max='100';slider.value='50';slider.setAttribute('aria-label',c.title+' · Helligkeit');slider.onchange=()=>act(c,{on:true,brightness:Number(slider.value)});card.append(slider);controls.push(slider);}
+        if(c.kind==='light'&&!c.brightnessBinding){const slider=el('input','widget-slider');slider.type='range';slider.min='1';slider.max='100';slider.value='50';slider.setAttribute('aria-label',c.title+' · Helligkeit');slider.onchange=()=>act(c,{on:true,brightness:Number(slider.value)});const sliderPart=el('div','widget-slider-part');sliderPart.append(slider);card.append(sliderPart);controls.push(slider);}
         card.append(feedback);
       }
+      decorateCard(card,c);
       if(options.mode==='editor'&&!payload.preview){
         for(const direction of ['nw','n','ne','e','se','s','sw','w']){const resize=el('button','dash-resize handle-'+direction);resize.dataset.direction=direction;resize.setAttribute('aria-label',c.title+' · Größe ändern '+direction);card.append(resize);}
         const label=el('span','selection-label',c.title);card.append(label);
-        card.onpointerdown=e=>drag(e,c,card,e.target.dataset?.direction||'');card.onclick=()=>{selected=c.id;bridge({type:'select',id:c.id});markSelection();};
+        card.onpointerdown=e=>{if(payload.editContents&&e.target.closest('[data-part]'))return;drag(e,c,card,e.target.dataset?.direction||'');};card.onclick=()=>{selected=c.id;bridge({type:'select',id:c.id});markSelection();};
       }
       nodes.set(c.id,{card,value,feedback,controls,c,camera:card.querySelector('.widget-camera'),cameraAt:0,cameraError:false,graph:card.querySelector('.chart-line')});grid.append(card);visibility.observe(card);
     }
     root.append(el('div','dash-status',options.mode==='editor'?'Gestaltungsvorschau · Werte nur lesend':'Verbindung wird geprüft …'));applyValues();
   }
+  const partSelectors={title:'.widget-top',value:'.widget-value',condition:'.weather-condition',details:'.weather-details',text:'.widget-text',media:'.widget-image',chart:'.widget-chart',caption:'.chart-caption',buttons:'.widget-actions',slider:'.widget-slider-part',controls:'.climate-controls,.scene-activate,.camera-pause',symbol:'.state-symbol'};
+  function decorateCard(card,c){
+    card.classList.toggle('decoration',['line','group','spacer'].includes(c.kind));
+    card.style.zIndex=c.kind==='group'?'1':'2';if(c.kind==='group')card.classList.add('group-container');
+    if(c.groups?.[viewport()]){card.dataset.group=c.groups[viewport()];card.style.zIndex='2';}
+    const b=c.border;
+    if(b){card.style.setProperty('--custom-border-color',`var(--art-${b.color==='theme'?'accent':b.color},var(--line))`);card.style.borderStyle=b.style;card.style.borderWidth=b.width+'px';card.style.borderColor='var(--custom-border-color)';card.style.borderRadius=b.radius+'px';
+      if(b.surface==='none')card.style.background='transparent';if(b.surface==='panel')card.style.background='var(--panel)';if(b.surface==='tint')card.style.background='color-mix(in srgb,var(--accent) 8%,var(--bg))';
+    }
+    if(c.kind==='line'){card.style.border='0';const line=card.querySelector('.decoration-line');line.style.setProperty('--line-style',b?.style||'solid');line.style.setProperty('--line-width',(b?.width??1)+'px');line.style.color='var(--custom-border-color,var(--line))';}
+    for(const [key,selector] of Object.entries(partSelectors)){
+      const part=card.querySelector(selector);if(!part)continue;part.dataset.part=key;
+      const settings=c.interiors?.[viewport()]?.[key];
+      if(settings){part.classList.toggle('part-hidden',settings.hidden);part.style.textAlign=settings.alignment;part.style.justifyContent={start:'flex-start',center:'center',end:'flex-end'}[settings.alignment];if(settings.fontSize)part.style.fontSize=settings.fontSize+'px';if(!settings.automatic)positionPart(part,settings);}
+      if(options.mode==='editor'&&!payload.preview&&payload.editContents){part.classList.add('part-editable');part.title='Inhalt verschieben';part.onpointerdown=e=>dragPart(e,c,card,part,key);}
+    }
+  }
+  function positionPart(part,f){part.classList.add('part-positioned');Object.assign(part.style,{left:f.x+'%',top:f.y+'%',width:f.width+'%',height:f.height+'%'});}
+  function dragPart(e,c,card,part,key){
+    if(e.button!==0)return;e.preventDefault();e.stopPropagation();
+    const bounds=card.getBoundingClientRect(),rect=part.getBoundingClientRect(),start={x:e.clientX,y:e.clientY};
+    const w=Math.max(1,Math.min(100,Math.round(rect.width/bounds.width*100))),h=Math.max(1,Math.min(100,Math.round(rect.height/bounds.height*100)));
+    const original={x:Math.max(0,Math.min(100-w,Math.round((rect.left-bounds.left)/bounds.width*100))),y:Math.max(0,Math.min(100-h,Math.round((rect.top-bounds.top)/bounds.height*100))),width:w,height:h};let current=original;
+    const frozen={};for(const element of card.querySelectorAll('[data-part]')){const r=element.getBoundingClientRect();if(r.width>0&&r.height>0){const width=Math.max(1,Math.min(100,Math.round(r.width/bounds.width*100))),height=Math.max(1,Math.min(100,Math.round(r.height/bounds.height*100)));frozen[element.dataset.part]={x:Math.max(0,Math.min(100-width,Math.round((r.left-bounds.left)/bounds.width*100))),y:Math.max(0,Math.min(100-height,Math.round((r.top-bounds.top)/bounds.height*100))),width,height};}}
+    const oldStyle=part.getAttribute('style'),positioned=part.classList.contains('part-positioned');part.setPointerCapture(e.pointerId);
+    const move=ev=>{current={...original,x:Math.max(0,Math.min(100-w,original.x+Math.round((ev.clientX-start.x)/bounds.width*100))),y:Math.max(0,Math.min(100-h,original.y+Math.round((ev.clientY-start.y)/bounds.height*100)))};positionPart(part,current);};
+    const finish=ev=>{part.removeEventListener('pointermove',move);part.removeEventListener('pointerup',finish);part.removeEventListener('pointercancel',cancel);if(part.hasPointerCapture(ev.pointerId))part.releasePointerCapture(ev.pointerId);if(ev.type!=='pointercancel'){bridge({type:'part',id:c.id,part:key,viewport:viewport(),frame:current,frames:{...frozen,[key]:current}});}};
+    const cancel=ev=>{part.setAttribute('style',oldStyle||'');part.classList.toggle('part-positioned',positioned);finish(ev);};
+    part.addEventListener('pointermove',move);part.addEventListener('pointerup',finish);part.addEventListener('pointercancel',cancel);
+  }
   function markSelection(){for(const [id,n] of nodes)n.card.classList.toggle('selected',id===selected&&!payload.preview&&options.mode==='editor');}
   function drag(e,c,card,resizing){
     if(e.button!==0)return;e.preventDefault();selected=c.id;bridge({type:'select',id:c.id});markSelection();
+    const members=[...nodes.values()].filter(n=>n.c.groups?.[viewport()]===c.id).map(n=>({n,f:{...frame(n.c)}}));
     const start={x:e.clientX,y:e.clientY}, original={...frame(c)}, grid=card.parentElement, gap=documentModel.theme.spacing, cw=(grid.clientWidth-(columns[viewport()]-1)*gap)/columns[viewport()]+gap,rh=48+gap;let current=original;
     card.setPointerCapture(e.pointerId);
     const move=event=>{
@@ -158,24 +192,27 @@
         if(resizing.includes('w')){current.x=Math.max(0,Math.min(original.x+original.width-1,original.x+dx));current.width=original.width+original.x-current.x;}
         if(resizing.includes('n')){current.y=Math.max(0,Math.min(original.y+original.height-2,original.y+dy));current.height=Math.min(12,original.height+original.y-current.y);current.y=original.y+original.height-current.height;}
       } else {current.x=Math.max(0,Math.min(columns[viewport()]-original.width,original.x+dx));current.y=Math.max(0,Math.min(100,original.y+dy));}
-      setFrame(card,current);grid.classList.add('is-dragging');
+      if(c.kind==='group'&&members.some(({f})=>f.x-original.x+f.width>current.width||f.y-original.y+f.height>current.height||f.y+current.y-original.y>100)){current={...original};}
+      for(const n of nodes.values()){const g=frame(n.c);n.card.classList.toggle('group-drop-target',c.kind!=='group'&&n.c.kind==='group'&&current.x>=g.x&&current.y>=g.y&&current.x+current.width<=g.x+g.width&&current.y+current.height<=g.y+g.height);}
+      setFrame(card,current);for(const {n,f} of members)setFrame(n.card,{...f,x:f.x+current.x-original.x,y:f.y+current.y-original.y});grid.classList.add('is-dragging');
     };
-    const finish=event=>{grid.classList.remove('is-dragging');card.removeEventListener('pointermove',move);card.removeEventListener('pointerup',finish);card.removeEventListener('pointercancel',cancel);if(card.hasPointerCapture(event.pointerId))card.releasePointerCapture(event.pointerId);if(JSON.stringify(current)!==JSON.stringify(original)){c.layouts[viewport()]=current;bridge({type:'layout',id:c.id,viewport:viewport(),frame:current});}};
-    const cancel=event=>{current=original;setFrame(card,original);finish(event);};card.addEventListener('pointermove',move);card.addEventListener('pointerup',finish);card.addEventListener('pointercancel',cancel);
+    const finish=event=>{for(const n of nodes.values())n.card.classList.remove('group-drop-target');grid.classList.remove('is-dragging');card.removeEventListener('pointermove',move);card.removeEventListener('pointerup',finish);card.removeEventListener('pointercancel',cancel);if(card.hasPointerCapture(event.pointerId))card.releasePointerCapture(event.pointerId);for(const {n,f} of members)setFrame(n.card,f);if(JSON.stringify(current)!==JSON.stringify(original)){c.layouts[viewport()]=current;bridge({type:'layout',id:c.id,viewport:viewport(),frame:current});}};
+    const cancel=event=>{current=original;setFrame(card,original);for(const {n,f} of members)setFrame(n.card,f);finish(event);};card.addEventListener('pointermove',move);card.addEventListener('pointerup',finish);card.addEventListener('pointercancel',cancel);
   }
   function applyValues(){
     const now=new Date(),clock=root.querySelector('.dash-clock');if(clock){clock.querySelector('.clock-date').textContent=now.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short',year:'numeric'});clock.querySelector('.clock-time').textContent=now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});}
     for(const [id,n] of nodes){
+      if(['group','line','spacer'].includes(n.c.kind))continue;
       const v=values[id],known=v?.known===true;let text=known?String(v.value):v?.reason||'Wert nicht verfügbar';
       if(known&&typeof v.value==='boolean')text=v.value?'Ein':'Aus';
       if(known&&['light','switch'].includes(n.c.kind)&&['on','off'].includes(v.value))text=v.value==='on'?'Ein':'Aus';
       if(known&&typeof v.value==='number')text=new Intl.NumberFormat('de-DE',{maximumFractionDigits:2}).format(v.value);
       if(known&&['value','graph'].includes(n.c.kind)&&typeof v.value==='string'&&v.value.trim()!==''&&Number.isFinite(Number(v.value)))text=new Intl.NumberFormat('de-DE',{maximumFractionDigits:2}).format(Number(v.value));
       if(known&&['value','graph'].includes(n.c.kind)&&numeric(v.value)===null)text=displayState(n.c,v);
-      const unit=n.c.unit||v?.unit||'';if(known&&unit)text+=' '+unit;
+      const unit=n.c.unit||v?.unit||'';if(known&&unit&&n.c.showUnit!==false)text+=' '+unit;
       n.card.classList.toggle('is-numeric',known&&numeric(v.value)!==null);
       updateVisual(n,v);
-      if(known&&n.c.kind==='climate')text=Number.isFinite(v.temperature)?new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(v.temperature)+'°':String(v.value);
+      if(known&&n.c.kind==='climate')text=Number.isFinite(v.temperature)?new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(v.temperature)+(n.c.showUnit===false?'':'°'):String(v.value);
       if(known&&n.c.kind==='scene')text='Bereit';
       if(n.c.kind==='camera'){text=known?(options.mode==='editor'?'Vorschau · Einzelbilder':n.cameraReady?(n.c.cameraMode==='snapshots'?'Livebilder · alle 2 Sekunden':'Live · MJPEG'):'Livebild wird geladen …'):(v?.reason||'Kamera nicht verfügbar');if(n.camera&&options.mode==='editor'){if(v?.image){if(n.camera.src!==v.image)n.camera.src=v.image;}else n.camera.removeAttribute('src');}}
       if(n.cameraError&&n.c.kind==='camera')text='Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen';
@@ -192,7 +229,7 @@
   function weather(n,v){
     const labels={'clear-night':'Klare Nacht',cloudy:'Bewölkt',exceptional:'Außergewöhnliches Wetter',fog:'Nebel',hail:'Hagel',lightning:'Gewitter','lightning-rainy':'Gewitter mit Regen',partlycloudy:'Teilweise bewölkt',pouring:'Starkregen',rainy:'Regen',snowy:'Schnee','snowy-rainy':'Schneeregen',sunny:'Sonnig',windy:'Windig','windy-variant':'Windig und bewölkt'};
     const known=v?.known===true, o=n.c.weather||{}, format=x=>new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(x);
-    const temperature=known&&Number.isFinite(v.temperature)?format(v.temperature)+(v.temperature_unit?' '+v.temperature_unit:' · Einheit fehlt'):'—';
+    const temperature=known&&Number.isFinite(v.temperature)?format(v.temperature)+(n.c.showUnit===false?'':v.temperature_unit?' '+v.temperature_unit:' · Einheit fehlt'):'—';
     const condition=n.card.querySelector('.weather-condition'), details=n.card.querySelector('.weather-details');
     n.value.textContent=temperature;
     condition.hidden=o.showCondition===false&&known;
@@ -240,7 +277,7 @@
   async function refresh(){if(loading||document.hidden||!published)return;loading=true;const epoch=sequence;try{const result=await request('api/published/'+published.id+'/values');if(epoch!==sequence)return;if(result.revision!==published.revision){await loadPublished(published.id);return;}values=result.values;applyValues();root.querySelector('.dash-status').textContent=result.connected?'':'Home Assistant nicht verbunden';}catch(e){values={};applyValues();const status=root.querySelector('.dash-status');if(status)status.textContent='Verbindung unterbrochen · Bedienung pausiert';}finally{loading=false;}}
   async function loadPublished(id){sequence++;published=await request('api/published/'+encodeURIComponent(id));documentModel=published.document;values={};render();}
   async function viewer(){const id=new URL(location.href).searchParams.get('dashboard');try{if(id){await loadPublished(id);await refresh();timer=setInterval(refresh,1000);cameraTimer=setInterval(cameraTick,1000);}else{const list=await request('api/published');root.replaceChildren();root.append(el('h1','','Dashboards'),el('p','dash-catalog-subtitle','Dein Zuhause. So wie du es gestaltet hast.'));const catalog=el('div','dash-catalog');catalog.style.marginTop='24px';for(const d of list.dashboards){const a=el('a','',d.title);a.href='?dashboard='+encodeURIComponent(d.id);a.append(el('small','',d.pages+' Seiten'));catalog.append(a);}root.append(catalog);if(!list.dashboards.length)root.append(el('p','dash-status','Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.'));}}catch(e){root.replaceChildren(el('p','dash-status',e.message));}}
-  window.Nodivra={boot(o){options=o;if(o.mode==='viewer')viewer();else bridge({type:'ready'});},update(p){const modelChanged=!!p.document&&JSON.stringify(p.document)!==signature;if(p.document)signature=JSON.stringify(p.document);const layoutChanged=p.pageID!==payload.pageID||p.viewport!==payload.viewport||p.preview!==payload.preview;payload={...payload,...p};selected=payload.selection||'';values=payload.values||{};pageID=payload.pageID||pageID;documentModel=payload.document;if(modelChanged||layoutChanged){render();}else{markSelection();applyValues();}}};
+  window.Nodivra={boot(o){options=o;if(o.mode==='viewer')viewer();else bridge({type:'ready'});},update(p){const modelChanged=!!p.document&&JSON.stringify(p.document)!==signature;if(p.document)signature=JSON.stringify(p.document);const layoutChanged=p.pageID!==payload.pageID||p.viewport!==payload.viewport||p.preview!==payload.preview||p.editContents!==payload.editContents;payload={...payload,...p};selected=payload.selection||'';values=payload.values||{};pageID=payload.pageID||pageID;documentModel=payload.document;if(modelChanged||layoutChanged){render();}else{markSelection();applyValues();}}};
   let lastViewport='';new ResizeObserver(()=>{if(options.mode==='viewer'&&documentModel){const v=viewport();if(v!==lastViewport){lastViewport=v;render();}}}).observe(root);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCameras();else{cameraTick();refresh();}});
   window.addEventListener('pagehide',()=>{clearInterval(timer);clearInterval(cameraTimer);stopCameras();sequence++;});

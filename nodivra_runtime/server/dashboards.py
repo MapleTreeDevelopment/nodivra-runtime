@@ -65,10 +65,31 @@ def validate(document, complete=False):
         require(isinstance(page.get("components"), list)); count += len(page["components"]); require(count <= 200, "Maximal 200 Komponenten pro Dashboard.")
         for c in page["components"]:
             require(isinstance(c, dict)); identity = identifier(c.get("id")); require(identity not in ids); ids.add(identity)
-            require(c.get("kind") in ("weather", "light", "climate", "scene", "switch", "value", "text", "image", "camera", "graph"))
+            require(c.get("kind") in ("weather", "light", "climate", "scene", "switch", "value", "text", "image", "camera", "graph", "line", "group", "spacer"))
             require(text(c.get("title")) and text(c.get("text"), 10000) and text(c.get("unit"), 32) and text(c.get("assetID"), 36))
             require(c.get("effect", "none") in ("none", "glow", "pulse") and type(c.get("animated", True)) is bool and c.get("cameraMode", "stream") in ("stream", "snapshots"))
             require(c.get("cardStyle") in (None, "standard", "minimal", "compact", "detail"), "Ungültiger Kartenstil.")
+            require("showUnit" not in c or type(c["showUnit"]) is bool)
+            require(c.get("lineDirection") in (None, "horizontal", "vertical"))
+            if "border" in c:
+                border = c["border"]
+                require(isinstance(border, dict) and border.get("style") in ("none", "solid", "dashed", "dotted", "double"))
+                require(number(border.get("width"), 0, 8) and number(border.get("radius"), 0, 48))
+                require(border.get("color") in ("theme", "muted", "warm", "cool", "success", "warning", "danger") and border.get("surface") in ("inherit", "none", "tint", "panel"))
+            if "interiors" in c:
+                interiors = c["interiors"]
+                require(isinstance(interiors, dict) and set(interiors) <= {"desktop", "tablet", "mobile"})
+                for parts in interiors.values():
+                    require(isinstance(parts, dict) and set(parts) <= {"title", "value", "condition", "details", "text", "media", "chart", "caption", "buttons", "slider", "controls", "symbol"})
+                    for part in parts.values():
+                        require(isinstance(part, dict) and type(part.get("automatic")) is bool and type(part.get("hidden")) is bool)
+                        require(number(part.get("x"), 0, 99) and number(part.get("y"), 0, 99) and number(part.get("width"), 1, 100) and number(part.get("height"), 1, 100))
+                        require(part["x"]+part["width"] <= 100 and part["y"]+part["height"] <= 100, "Inhalt liegt außerhalb der Karte.")
+                        require(part.get("alignment") in ("start", "center", "end") and number(part.get("fontSize"), 0, 64))
+            if "groups" in c:
+                require(isinstance(c["groups"], dict) and set(c["groups"]) <= {"desktop", "tablet", "mobile"})
+                require(c["kind"] != "group" or not c["groups"], "Gruppen können nicht verschachtelt werden.")
+                for gid in c["groups"].values(): identifier(gid)
             if "visual" in c:
                 visual = c["visual"]
                 symbols = ("auto", "none", "sun", "moon", "cloud", "partlycloudy", "rain", "snow", "sleet", "hail", "storm", "fog", "wind", "windcloud", "door", "window", "garage", "lock", "light", "temperature", "humidity", "fan", "power", "battery", "motion", "presence", "smoke", "water", "shield", "blind", "plug", "music", "vacuum", "calendar", "clock", "bell", "camera", "leaf", "warning")
@@ -112,7 +133,7 @@ def validate(document, complete=False):
                 if complete: identifier(linked["programID"]); identifier(linked["blockID"])
             if complete:
                 if c["kind"] == "image": require(c["assetID"] in asset_ids, c["title"] + ": Bild fehlt.")
-                if c["kind"] not in ("image", "text"):
+                if c["kind"] not in ("image", "text", "line", "group", "spacer"):
                     if b["source"] == "entity": require(bool(b["entityID"]) or bool(area), c["title"] + ": Entität fehlt.")
                     else:
                         identifier(b["programID"]); identifier(b["blockID"])
@@ -122,6 +143,12 @@ def validate(document, complete=False):
                 if c["kind"] in ("light", "switch"):
                     domains = ("light",) if c["kind"] == "light" else ("light", "switch", "input_boolean")
                     require(b["source"] == "entity" and (b["entityID"].split(".")[0] in domains or bool(area)) and not b["attribute"], c["title"] + ": Ungültiges Schaltziel.")
+        for c in page["components"]:
+            for size, gid in c.get("groups", {}).items():
+                group = next((g for g in page["components"] if g["id"] == gid and g["kind"] == "group"), None)
+                require(group is not None, "Gruppe fehlt auf dieser Seite.")
+                f, g = c["layouts"][size], group["layouts"][size]
+                require(g["x"] <= f["x"] and g["y"] <= f["y"] and f["x"]+f["width"] <= g["x"]+g["width"] and f["y"]+f["height"] <= g["y"]+g["height"], "Element liegt außerhalb seiner Gruppe.")
     return document
 
 class DashboardStore:

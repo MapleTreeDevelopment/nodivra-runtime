@@ -146,3 +146,22 @@
 .motion-paused,.motion-paused *,.document-hidden .dash-widget,.document-hidden .dash-widget *{animation-play-state:paused!important}
 
 @media(prefers-reduced-motion:no-preference){.dash-widget.is-active[data-card-style=minimal][data-effect=pulse]{animation:minimal-glow 5s ease-in-out infinite}@keyframes minimal-glow{50%{background:color-mix(in srgb,var(--visual-color) 9%,transparent)}}}
+
+/* Composable card content. Feedback stays in normal flow and cannot be hidden by layout settings. */
+.dash-widget.decoration{background:transparent;box-shadow:none;border-color:transparent}
+.dash-widget.group-container{z-index:1;background:color-mix(in srgb,var(--panel) 60%,transparent);border:1px solid var(--line)}
+.dash-widget[data-kind=spacer]{pointer-events:none}
+.dash-edit .dash-widget[data-kind=spacer]{pointer-events:auto;border:1px dashed var(--line)}
+.dash-widget .part-positioned{position:absolute!important;margin:0!important;min-height:0!important;min-width:0!important;max-width:none!important;padding:0;overflow:auto;flex:none;right:auto;bottom:auto;box-sizing:border-box}
+.dash-widget .part-hidden{display:none!important}
+.dash-edit .part-editable{pointer-events:auto!important;cursor:move;touch-action:none;outline:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:2px}
+.dash-edit .part-editable>*{pointer-events:none}
+.dash-edit .part-editable input,.dash-edit .part-editable button{pointer-events:none}
+.decoration-line{position:absolute;left:3%;top:50%;width:94%;height:0;border-top:var(--line-width,1px) var(--line-style,solid) currentColor}
+.decoration-line[data-direction=vertical]{left:50%;top:3%;height:94%;width:0;border-top:0;border-left:var(--line-width,1px) var(--line-style,solid) currentColor}
+
+.dash-edit .group-drop-target{outline:2px dashed var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--panel))!important}
+
+.widget-slider-part{width:100%;min-height:24px}.widget-actions.part-positioned{align-items:center}.part-editable.widget-slider-part input{pointer-events:none!important}
+
+.dash-widget .widget-feedback:not(:empty){position:absolute;z-index:8;left:8px;right:8px;bottom:8px;max-height:40%;overflow:auto;padding:6px 8px;border-radius:6px;background:var(--panel);color:var(--text)}

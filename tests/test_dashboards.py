@@ -33,6 +33,29 @@ class StoreTests(unittest.TestCase):
         self.doc=document(component())
     def tearDown(self): self.directory.cleanup()
     def save(self): return self.store.change(self.doc['id'],'save',request(document=self.doc))
+    def test_composition_roundtrip_and_reject_invalid_geometry(self):
+        group=component('group');card=component('value','sensor.temperature');line=component('line');spacer=component('spacer')
+        for size in ('desktop','tablet','mobile'):
+            group['layouts'][size]=dict(x=0,y=0,width=4,height=8)
+            card['layouts'][size]=dict(x=0,y=1,width=4,height=3)
+        card['groups']={'desktop':group['id']}
+        card['border']=dict(style='dashed',width=2,radius=12,color='warm',surface='none')
+        card['interiors']={'desktop':{'value':dict(automatic=False,hidden=False,x=10,y=20,width=80,height=30,alignment='center',fontSize=32)}}
+        card['showUnit']=False;line['lineDirection']='vertical'
+        doc=document(group,card,line,spacer);validate(doc,complete=True)
+        self.assertEqual(self.store.change(doc['id'],'save',request(document=doc))['document'],doc)
+        invalid=copy.deepcopy(doc);invalid['pages'][0]['components'][1]['interiors']['desktop']['value']['x']=90
+        with self.assertRaises(DashboardError):validate(invalid)
+        invalid=copy.deepcopy(doc);invalid['pages'][0]['components'][1]['groups']['desktop']=uid()
+        with self.assertRaises(DashboardError):validate(invalid)
+        invalid=copy.deepcopy(doc);invalid['pages'][0]['components'][1]['layouts']['desktop']['y']=9
+        with self.assertRaises(DashboardError):validate(invalid)
+        invalid=copy.deepcopy(doc);invalid['pages'][0]['components'][0]['groups']={'desktop':group['id']}
+        with self.assertRaises(DashboardError):validate(invalid)
+        for key,value in [('style','url(secret)'),('width',-1),('radius',100),('color','#ff0000'),('surface','image')]:
+            invalid=copy.deepcopy(doc);invalid['pages'][0]['components'][1]['border'][key]=value
+            with self.assertRaises(DashboardError):validate(invalid)
+
     def test_shared_card_styles_round_trip_and_validate(self):
         for kind in ('weather','value','light','climate','scene','switch','text','image','camera','graph'):
             card=component(kind);card['cardStyle']='detail';doc=document(card);doc['theme']['cardStyle']='minimal'
