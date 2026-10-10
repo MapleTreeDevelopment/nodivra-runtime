@@ -128,6 +128,7 @@ extension RuntimeEngine {
                 if item.reason != "Reset-Eingang R ist unbekannt; kein verlässlicher Zeitstatus." { item.changedAt = time }
                 item.phase = "unknown"; item.reason = "Reset-Eingang R ist unbekannt; kein verlässlicher Zeitstatus."; item.remaining = nil; item.elapsed = nil
             } else if b.function != nil && inputs.contains(where: { $0.status == "unknown" || $0.status == "missing" }) {
+                if item.reason != "Eingang unbekannt; kein verlässlicher Zeitstatus." { item.changedAt = time }
                 item.phase = "unknown"; item.reason = "Eingang unbekannt; kein verlässlicher Zeitstatus."; item.remaining = nil; item.elapsed = nil
             } else if let end, end > time {
                 if !restoring && (before == nil || abs(end - before!) > 0.001) {
