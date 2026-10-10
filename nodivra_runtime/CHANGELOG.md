@@ -1,3 +1,15 @@
+# 0.9.0
+
+- Eigenständige Dashboards mit Seiten, gemeinsamen Designvorgaben und derselben Darstellung wie die Mac-Vorschau.
+- Getrennter Dokumentenspeicher: Entwürfe sichern, ausdrücklich veröffentlichen, Veröffentlichung zurücknehmen und Versionen als Entwurf wiederherstellen.
+- Revisionsprüfung für mehrere Macs, idempotente Änderungsaufträge und automatische Datenbanksicherungen vor Dokumentänderungen.
+- Licht/Schalter, Werte, Text, Bilder, Kameras und Livegraphen. Livegraphen enthalten bis zu 120 Messpunkte seit dem Öffnen; keine Recorder-Historie.
+- Kamera-MJPEG und Einzelbilder über authentifiziertes Ingress. Keine Kamera- oder HA-Zugangsschlüssel im Browser. Höchstens vier parallele Kameraverbindungen.
+- Abschaltbare Diagrammanimation und Status-Effekte; respektiert „Bewegung reduzieren“. Ausgeblendete Kameras pausieren.
+- Zugriff auf Dashboards in dieser Version mit HA-Administratorkonto. Separate Tablet-Anmeldung, Ton, HLS/WebRTC und weitere Steuerelemente folgen später.
+- Ein beschädigter oder nicht lesbarer Dashboard-Speicher blockiert den Start der Automations-Runtime nicht; die Originaldatei bleibt erhalten.
+- Bestehende Automationsdaten und Wiederanlaufregeln bleiben erhalten. Ein Runtime-Update startet den Dienst wie üblich neu; vorher über den Updateassistenten sichern.
+
 # 0.8.0
 
 - Live-Diagnose für Logikeingänge: Ein/Aus, unbekannte Werte, fehlende und neutral unbeschaltete Eingänge, Negierung.

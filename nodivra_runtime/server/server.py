@@ -9,12 +9,16 @@ import math
 import os
 from pathlib import Path
 import sqlite3
+import sys
 import time
 import uuid
 from collections import deque
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
-VERSION = "0.8.0"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dashboards import DashboardService, DashboardError
+
+VERSION = "0.9.0"
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
@@ -296,6 +300,7 @@ class Runtime:
         self.ticker = None
         self.saved_at = {}
         self.recovery_task = None
+        self.dashboards = DashboardService(self, path)
 
     def lock(self, identity):
         return self.locks.setdefault(identity, asyncio.Lock())
@@ -517,14 +522,21 @@ class Runtime:
                 if request.headers.get("Origin"):
                     return problem(403, "Browser-Zugriffe auf die Runtime-API sind nicht zugelassen.")
             try:
-                return await handler(request)
+                if not request.path.startswith("/api/v1/dashboards") and request.content_length and request.content_length > 1024*1024:
+                    return problem(413, "Anfrage zu groß.")
+                response = await handler(request)
+                if request.path.startswith("/api/v1/dashboards"): response.headers["Cache-Control"] = "no-store"
+                return response
+            except DashboardError as error:
+                return problem(error.status, error.message)
             except web.HTTPException as error:
                 return problem(error.status, "Anfrage konnte nicht verarbeitet werden.")
             except (ValueError, TypeError, KeyError):
                 return problem(422, "Ungültige Anfrage oder ungültiges Programm.")
             except Exception:
                 return problem(503, "Runtime vorübergehend nicht verfügbar. Schreibstatus vor einer Wiederholung prüfen.")
-        app = web.Application(middlewares=[boundary], client_max_size=1024*1024)
+        app = web.Application(middlewares=[boundary], client_max_size=4*1024*1024+65536)
+        self.dashboards.routes(app)
         app.router.add_get("/health", self.health)
         app.router.add_get("/api/v1/status", self.status)
         app.router.add_get("/api/v1/automations", self.list_programs)
@@ -547,7 +559,7 @@ class Runtime:
         return web.json_response({"service": "nodivra-runtime", "version": VERSION}, status=200 if ready else 503)
 
     async def status(self, request):
-        return web.json_response({"version": VERSION, "protocolVersion": 5, "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
+        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "dashboards.documents.v1"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
 
     async def list_programs(self, request):
         return web.json_response({"automations": self.records()})
