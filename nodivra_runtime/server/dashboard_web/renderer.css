@@ -80,12 +80,69 @@
 .weather-condition{font-size:.9rem;color:var(--muted)}
 .dash-widget[data-kind="weather"] .widget-value{font-size:2.3rem;font-weight:300;line-height:1.15}
 .weather-details{font-size:.8rem;color:var(--muted);line-height:1.8}
-.dash-widget[data-weather="minimal"]{background:transparent;box-shadow:none;border-color:transparent}
-.dash-widget[data-weather="compact"] .widget-value{font-size:1.8rem}
-.dash-widget[data-weather="detail"]{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 12%,var(--panel)),var(--panel))}
 .dash-widget[data-weather="detail"] .weather-details{border-top:1px solid var(--line);padding-top:10px}
 
 /* Keep short dashboards at the top of the ingress grid, independent of viewport height. */
 .dash-heading{align-items:flex-start;padding:2px 0 20px;border-bottom:1px solid var(--line)}
 .tool-layout>#dashboard{margin-block:0;align-self:start;padding-top:28px}
 @media(max-width:560px){.tool-layout>#dashboard{padding-top:18px}.dash-heading{padding-bottom:16px}}
+
+/* One visual language across every component. Selection and effects remain visible. */
+.dash-widget[data-card-style="minimal"]{background:transparent;box-shadow:none;border-color:transparent;padding:18px;gap:10px}
+.dash-widget[data-card-style="compact"]{padding:12px;gap:6px}
+.dash-widget[data-card-style="detail"]{padding:18px;gap:10px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 12%,var(--panel)),var(--panel))}
+.dash-widget:is([data-kind="weather"],[data-kind="value"]):not([data-card-style="standard"]){justify-content:center}
+.dash-widget:not([data-card-style="standard"]) .widget-title,.dash-widget:not([data-card-style="standard"]) .weather-condition{font-size:.9rem;font-weight:400;color:var(--muted)}
+.dash-widget:is([data-kind="weather"],[data-kind="value"]):not([data-card-style="standard"]) .widget-value{margin-top:0;font-size:2.3rem;font-weight:300;line-height:1.15;color:var(--muted);font-variant-numeric:tabular-nums}
+.dash-widget:is([data-kind="weather"],[data-kind="value"])[data-card-style="compact"] .widget-value{font-size:1.8rem}
+
+.dash-status:empty{display:none}
+.dash-widget:is([data-kind="weather"],[data-kind="value"]){container-type:inline-size}
+.dash-widget:is([data-kind="weather"],[data-kind="value"]) .widget-value{white-space:nowrap;overflow-wrap:normal;max-width:100%}
+@supports(font-size:1cqi){.dash-widget:is([data-kind="weather"],[data-kind="value"]) .widget-value{font-size:clamp(12px,26cqi,2.3rem)!important}}
+
+/* Semantic accents are palette-aware, shared by symbols, graphs and effects. */
+:root{--art-accent:var(--accent);--art-warm:light-dark(#946323,#e8bf76);--art-cool:light-dark(#40738b,#8cbaca);--art-success:light-dark(#377953,#91c8a1);--art-warning:light-dark(#9b6b25,#dab675);--art-danger:light-dark(#ac514b,#dc9790)}
+:root[data-palette=slate]{--art-accent:light-dark(#30744e,#8ee4b6)}
+:root[data-palette=sand]{--art-warm:light-dark(#90612f,#d7b789);--art-cool:light-dark(#627b7d,#adc3bf);--art-success:light-dark(#68794f,#b0c09a);--art-warning:light-dark(#9b702f,#d7bc8b);--art-danger:light-dark(#a15642,#d6a08e)}
+.dash-widget{--visual-color:var(--art-accent)}
+.dash-widget[data-visual-color=muted]{--visual-color:var(--muted)}
+.dash-widget[data-visual-color=warm]{--visual-color:var(--art-warm)}
+.dash-widget[data-visual-color=cool]{--visual-color:var(--art-cool)}
+.dash-widget[data-visual-color=success]{--visual-color:var(--art-success)}
+.dash-widget[data-visual-color=warning]{--visual-color:var(--art-warning)}
+.dash-widget[data-visual-color=danger]{--visual-color:var(--art-danger)}
+.state-symbol{position:absolute!important;top:12px;right:12px;width:32px;height:32px;flex:none;color:var(--visual-color);pointer-events:none;z-index:2}
+.state-symbol[hidden]{display:none!important}.state-symbol svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;overflow:visible}
+.has-symbol .widget-title,.has-symbol .weather-condition{padding-right:32px}
+.dash-widget .chart-line{stroke:var(--visual-color)}.widget-slider{accent-color:var(--visual-color)}
+.dash-widget.is-active:is([data-effect=glow],[data-effect=pulse]){border-color:color-mix(in srgb,var(--visual-color) 45%,var(--line));box-shadow:inset 0 0 20px color-mix(in srgb,var(--visual-color) 9%,transparent)}
+.dash-widget.is-active[data-card-style=minimal]:is([data-effect=glow],[data-effect=pulse]){border-color:transparent;box-shadow:none;background:color-mix(in srgb,var(--visual-color) 5%,transparent)}
+@keyframes nodivra-pulse{50%{border-color:var(--visual-color)}}
+.dash-widget[data-kind=value]:not(.is-numeric) .widget-value{font-size:1rem!important;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+.state-symbol{--motion-time:24s;--weather-time:4s}.state-symbol[data-speed=normal]{--motion-time:12s;--weather-time:2.8s}.state-symbol[data-speed=fast]{--motion-time:6s;--weather-time:1.6s}
+.door-leaf{transform-origin:13px 24px}.state-symbol[data-open=true] .door-leaf{transform:perspective(70px) rotateY(-55deg)}
+@media(prefers-reduced-motion:no-preference){
+ .state-symbol[data-animation=door] .door-leaf{transition:transform .65s ease-in-out}
+ .state-symbol[data-animation=rotate]>svg{animation:symbol-rotate var(--motion-time) linear infinite}
+ .state-symbol[data-animation=pulse]>svg{animation:symbol-breathe var(--weather-time) ease-in-out infinite}
+ .state-symbol[data-animation=sway]>svg{animation:symbol-sway var(--weather-time) ease-in-out infinite}
+ .state-symbol[data-animation=bounce]>svg{animation:symbol-bounce var(--weather-time) ease-in-out infinite}
+ .state-symbol[data-animation=rotate] .ray-tips{animation:symbol-breathe var(--weather-time) ease-in-out infinite;transform-origin:24px 24px}
+ .state-symbol[data-animation=weather] .rain-drop{animation:symbol-rain var(--weather-time) linear infinite}
+ .state-symbol[data-animation=weather] .snow-flake{animation:symbol-snow var(--weather-time) ease-in-out infinite}
+ .state-symbol[data-animation=weather] .lightning{animation:symbol-flash 7s ease-in-out infinite}
+ .state-symbol[data-animation=weather] .wind-lines{animation:symbol-wind var(--weather-time) ease-in-out infinite}
+ .state-symbol[data-animation=weather] .ray-tips{animation:symbol-breathe var(--weather-time) ease-in-out infinite}
+ @keyframes symbol-rotate{to{transform:rotate(360deg)}}
+ @keyframes symbol-breathe{50%{opacity:.55;transform:scale(.94)}}
+ @keyframes symbol-sway{25%{transform:rotate(-7deg)}75%{transform:rotate(7deg)}}
+ @keyframes symbol-bounce{50%{transform:translateY(-3px)}}
+ @keyframes symbol-rain{0%{opacity:0;transform:translateY(-2px)}30%{opacity:1}100%{opacity:0;transform:translateY(5px)}}
+ @keyframes symbol-snow{0%{opacity:0;transform:translate(-1px,-2px)}35%{opacity:1}100%{opacity:0;transform:translate(2px,5px)}}
+ @keyframes symbol-flash{0%,80%,100%{opacity:.4}85%,92%{opacity:1}}
+ @keyframes symbol-wind{50%{transform:translateX(3px);opacity:.5}}
+}
+.motion-paused,.motion-paused *,.document-hidden .dash-widget,.document-hidden .dash-widget *{animation-play-state:paused!important}
+
+@media(prefers-reduced-motion:no-preference){.dash-widget.is-active[data-card-style=minimal][data-effect=pulse]{animation:minimal-glow 5s ease-in-out infinite}@keyframes minimal-glow{50%{background:color-mix(in srgb,var(--visual-color) 9%,transparent)}}}

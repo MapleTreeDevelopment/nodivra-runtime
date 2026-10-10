@@ -19,3 +19,40 @@
 .tool-brand>div{display:contents}.tool-brand-mark{grid-column:1;grid-row:1;display:flex;align-items:center;color:#146eff}
 .tool-brand strong{grid-column:2;grid-row:1;line-height:1.45}
 .tool-brand small{grid-column:2;grid-row:2;margin:0}
+
+/* Dashboard viewer chrome inherits the selected palette. Runtime navigation is independent. */
+.dashboard-viewer{grid-template-columns:220px minmax(0,1fr);grid-template-rows:72px auto;align-content:start}
+.viewer-header{grid-column:1/-1;grid-row:1;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--line);background:var(--bg);min-width:0}
+.viewer-header .tool-brand{padding:0}.viewer-header .tool-brand small{font-size:11px}
+#navigation-toggle{display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:9px;background:transparent;color:var(--text);flex:none}
+#navigation-toggle:hover{background:var(--panel)}#navigation-toggle svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.dashboard-viewer>.tool-sidebar{grid-column:1;grid-row:2;top:72px;height:calc(100dvh - 72px);background:var(--bg);padding-top:20px}
+.dashboard-viewer>#dashboard{grid-column:2;grid-row:2;max-width:none;min-width:0}
+.dashboard-viewer.navigation-collapsed{grid-template-columns:minmax(0,1fr)}
+.dashboard-viewer.navigation-collapsed>#dashboard{grid-column:1}
+.dashboard-viewer .tool-sidebar[hidden],.navigation-backdrop[hidden],#open-unframed[hidden]{display:none!important}
+.dashboard-viewer .tool-link:hover,.dashboard-viewer #dashboard-page-nav button[aria-current=page]{background:var(--panel);color:var(--text)}
+.dashboard-viewer .tool-link[aria-current=page]{background:color-mix(in srgb,var(--accent) 12%,var(--bg));color:var(--accent)}
+.dashboard-viewer .browser-tools{padding:0 12px;font-size:11px}.dashboard-viewer .browser-tools:has(#browser-result:empty):not(:has(button)){display:none}
+.navigation-backdrop{position:fixed;inset:72px 0 0;background:#0005;border:0;z-index:9}
+@media(max-width:760px){
+ .dashboard-viewer{display:grid;grid-template-columns:minmax(0,1fr)}
+ .viewer-header{padding:12px max(16px,env(safe-area-inset-right)) 12px max(16px,env(safe-area-inset-left))}
+ .dashboard-viewer>#dashboard{grid-column:1;padding:18px}
+ .dashboard-viewer>.tool-sidebar{display:flex;position:fixed;top:72px;left:0;bottom:0;width:min(280px,85vw);height:calc(100dvh - 72px);z-index:10;border-right:1px solid var(--line);border-bottom:0;overflow:auto;gap:24px}
+ .dashboard-viewer .tool-sidebar nav{display:grid}.dashboard-viewer .tool-sidebar .tool-settings{margin-top:auto}
+ .dashboard-viewer .nav-section-title{display:block}
+}
+
+.dashboard-viewer .tool-brand small{display:block}
+.viewer-header .tool-brand{align-self:flex-start}
+
+
+/* The navigation control belongs to the page title, independent of branding. */
+.dashboard-viewer .dash-heading{align-items:center;gap:12px}
+.dashboard-viewer .dash-heading .dash-titles{flex:1;min-width:0}
+.dashboard-viewer .dash-heading #navigation-toggle{margin-left:auto;align-self:center}
+.dashboard-viewer .viewer-header[hidden]{display:none!important}
+.dashboard-viewer.page-logo-hidden{grid-template-rows:0 auto}
+.dashboard-viewer.page-logo-hidden>.tool-sidebar{top:0;height:100dvh}
+.dashboard-viewer.page-logo-hidden .navigation-backdrop{top:0}

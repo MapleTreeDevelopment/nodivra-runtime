@@ -86,6 +86,8 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
     async def test_html_contains_no_credential_and_reuses_renderer(self):
         response=await self.client.get('/'); text=await response.text()
         self.assertNotIn(KEY,text); self.assertNotIn(display_key(KEY),text)
+        self.assertIn('id="navigation-toggle"',text); self.assertIn('Ohne HA-Rahmen öffnen',text)
+        self.assertNotIn('Mit Home Assistant verbunden',text)
         self.assertIn('Nodivra.boot',text);self.assertIn("frame-ancestors 'self'",response.headers['Content-Security-Policy'])
 
     async def test_direct_access_and_forged_proxy_header_denied(self):

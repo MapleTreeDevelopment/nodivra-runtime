@@ -39,6 +39,7 @@ def validate(document, complete=False):
     require("showClock" not in document or type(document["showClock"]) is bool)
     require(len(canonical(document).encode()) <= MAX_DOCUMENT, "Das Dashboard ist zu groß (maximal 4 MB).")
     theme = document.get("theme", {})
+    require(isinstance(theme, dict) and theme.get("cardStyle") in (None, "standard", "minimal", "compact", "detail"), "Ungültiger Kartenstil.")
     require(isinstance(theme, dict) and theme.get("palette") in (None, "slate", "cloud", "sand", "midnight"))
     require(isinstance(theme, dict) and theme.get("appearance") in ("system", "light", "dark") and theme.get("font") in ("system", "rounded", "serif"))
     require(isinstance(theme.get("accent"), str) and re.fullmatch(r"#[a-fA-F0-9]{6}", theme["accent"]) is not None)
@@ -60,12 +61,33 @@ def validate(document, complete=False):
     for page in pages:
         require(isinstance(page, dict)); identity = identifier(page.get("id")); require(identity not in ids); ids.add(identity)
         require(text(page.get("title")) and page["title"].strip())
+        require(page.get("showLogo") is None or type(page["showLogo"]) is bool, "Ungültige Logo-Einstellung.")
         require(isinstance(page.get("components"), list)); count += len(page["components"]); require(count <= 200, "Maximal 200 Komponenten pro Dashboard.")
         for c in page["components"]:
             require(isinstance(c, dict)); identity = identifier(c.get("id")); require(identity not in ids); ids.add(identity)
             require(c.get("kind") in ("weather", "light", "climate", "scene", "switch", "value", "text", "image", "camera", "graph"))
             require(text(c.get("title")) and text(c.get("text"), 10000) and text(c.get("unit"), 32) and text(c.get("assetID"), 36))
             require(c.get("effect", "none") in ("none", "glow", "pulse") and type(c.get("animated", True)) is bool and c.get("cameraMode", "stream") in ("stream", "snapshots"))
+            require(c.get("cardStyle") in (None, "standard", "minimal", "compact", "detail"), "Ungültiger Kartenstil.")
+            if "visual" in c:
+                visual = c["visual"]
+                symbols = ("auto", "none", "sun", "moon", "cloud", "partlycloudy", "rain", "snow", "sleet", "hail", "storm", "fog", "wind", "windcloud", "door", "window", "garage", "lock", "light", "temperature", "humidity", "fan", "power", "battery", "motion", "presence", "smoke", "water", "shield", "blind", "plug", "music", "vacuum", "calendar", "clock", "bell", "camera", "leaf", "warning")
+                colors = ("theme", "muted", "warm", "cool", "success", "warning", "danger")
+                animations = ("auto", "none", "rotate", "pulse", "sway", "bounce", "change")
+                require(isinstance(visual, dict))
+                require(visual.get("symbol") in symbols and visual.get("color") in colors and visual.get("animation") in animations)
+                require(visual.get("trigger") in ("active", "always", "change") and visual.get("speed") in ("slow", "normal", "fast"))
+                rules = visual.get("rules")
+                require(isinstance(rules, list) and len(rules) <= 8, "Maximal 8 Symbolregeln pro Karte.")
+                rule_ids = set()
+                for rule in rules:
+                    require(isinstance(rule, dict)); rid = identifier(rule.get("id")); require(rid not in rule_ids); rule_ids.add(rid)
+                    require(rule.get("comparison") in ("eq", "neq", "gt", "gte", "lt", "lte") and text(rule.get("value"), 180))
+                    require(rule.get("symbol") in symbols and rule.get("color") in colors and rule.get("animation") in animations)
+                    if rule["comparison"] not in ("eq", "neq"):
+                        try: threshold = float(rule["value"].replace(",", "."))
+                        except (ValueError, TypeError): raise DashboardError(422, "Ein Schwellenwert muss eine Zahl sein.")
+                        require(math.isfinite(threshold), "Ein Schwellenwert muss eine endliche Zahl sein.")
             if "weather" in c:
                 weather = c["weather"]
                 require(isinstance(weather, dict) and weather.get("style") in ("minimal", "compact", "detail"))
@@ -283,6 +305,10 @@ class DashboardService:
                     state = self.runtime.ha.states.get(b["entityID"])
                     if state not in (None, "unknown", "unavailable"):
                         value = self.runtime.ha.states.get(b["entityID"] + ("#"+b["attribute"] if b["attribute"] else ""))
+                        # Whitelist display metadata; never expose arbitrary attributes or credentials.
+                        for source, target in (("device_class", "deviceClass"), ("unit_of_measurement", "unit")):
+                            candidate = self.runtime.ha.states.get(b["entityID"]+"#"+source)
+                            if isinstance(candidate, str) and len(candidate) <= 64 and not b["attribute"]: extra[target] = candidate
                         if c["kind"] == "weather":
                             for attribute in ("temperature", "humidity", "wind_speed"):
                                 candidate = self.runtime.ha.states.get(b["entityID"]+"#"+attribute)
@@ -316,6 +342,8 @@ class DashboardService:
                 linked = c.get("brightnessBinding")
                 if linked:
                     extra["linkedBrightness"] = self.linked_brightness(linked)
+                if isinstance(value, (dict, list, tuple)):
+                    value = None; reason = "Strukturierte Daten benötigen eine eigene Karte"
                 if isinstance(value, float) and not math.isfinite(value): value = None
                 known = value is not None and value not in ("unknown", "unavailable")
                 result[c["id"]] = dict(known=known, value=value if known else None, observedAt=time.time(), reason="" if known else reason, **extra)

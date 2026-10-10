@@ -33,6 +33,33 @@ class StoreTests(unittest.TestCase):
         self.doc=document(component())
     def tearDown(self): self.directory.cleanup()
     def save(self): return self.store.change(self.doc['id'],'save',request(document=self.doc))
+    def test_shared_card_styles_round_trip_and_validate(self):
+        for kind in ('weather','value','light','climate','scene','switch','text','image','camera','graph'):
+            card=component(kind);card['cardStyle']='detail';doc=document(card);doc['theme']['cardStyle']='minimal'
+            validate(doc)
+            record=self.store.change(doc['id'],'save',request(document=doc))
+            self.assertEqual(record['document']['theme']['cardStyle'],'minimal')
+            self.assertEqual(record['document']['pages'][0]['components'][0]['cardStyle'],'detail')
+        for invalid in ('invalid',1,{},[]):
+            card=component();card['cardStyle']=invalid
+            with self.assertRaises(DashboardError):validate(document(card))
+
+    def test_visual_rules_validate_and_persist(self):
+        card=component('value','sensor.temperature')
+        card['visual']=dict(symbol='temperature',color='theme',animation='auto',trigger='active',speed='slow',rules=[dict(id=uid(),comparison='gte',value='25,5',symbol='sun',color='warning',animation='pulse')])
+        doc=document(card);doc['pages'][0]['showLogo']=False
+        validate(doc,complete=True)
+        record=self.store.change(doc['id'],'save',request(document=doc))
+        self.assertEqual(record['document'],doc)
+        for value in ('NaN','inf','', 'hot'):
+            invalid=copy.deepcopy(doc);invalid['pages'][0]['components'][0]['visual']['rules'][0]['value']=value
+            with self.assertRaises(DashboardError):validate(invalid)
+        for field,value in (('symbol','<svg onload=alert(1)>'),('color','url(secret)'),('animation','script'),('trigger','random'),('speed','infinite')):
+            invalid=copy.deepcopy(doc);invalid['pages'][0]['components'][0]['visual'][field]=value
+            with self.assertRaises(DashboardError):validate(invalid)
+        card['visual']['rules']*=9
+        with self.assertRaises(DashboardError):validate(doc)
+
     def test_corrupt_dashboard_storage_does_not_prevent_runtime_construction(self):
         import server
         with tempfile.TemporaryDirectory() as folder:
@@ -103,6 +130,17 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result['known']);self.assertNotIn('temperature',result)
         card['weather']['style']='invalid'
         with self.assertRaises(DashboardError):validate(doc, complete=True)
+
+    def test_entity_display_metadata_is_whitelisted(self):
+        card=component('value','sensor.temperature');doc=document(card)
+        states={'sensor.temperature':'23.5','sensor.temperature#unit_of_measurement':'°C','sensor.temperature#device_class':'temperature','sensor.temperature#password':'secret'}
+        service=DashboardService(SimpleNamespace(ha=SimpleNamespace(connected=True,states=states)),self.directory.name)
+        result=service.values(doc)[card['id']]
+        self.assertEqual(result['unit'],'°C');self.assertEqual(result['deviceClass'],'temperature');self.assertNotIn('secret',str(result))
+        card['binding']['attribute']='other';states['sensor.temperature#other']={'nested':True}
+        result=service.values(doc)[card['id']];self.assertFalse(result['known']);self.assertNotIn('unit',result)
+        states['sensor.temperature']='unknown';result=service.values(doc)[card['id']]
+        self.assertFalse(result['known']);self.assertEqual(result['reason'],'Zustand unbekannt')
 
     async def asyncSetUp(self):
         self.directory=tempfile.TemporaryDirectory()

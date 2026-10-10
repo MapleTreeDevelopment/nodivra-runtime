@@ -63,6 +63,7 @@ class RuntimeConfiguration:
         app.router.add_get("/dashboard", self.dashboard)
         app.router.add_post("/automations/{id}/state", self.program_state)
         app.router.add_post("/automations/{id}/recovery", self.program_recovery)
+        app.router.add_post("/update-policy", self.update_policy)
         app.router.add_post("/generate", self.generate)
         app.router.add_post("/apply", self.apply)
         return app
@@ -99,6 +100,9 @@ class RuntimeConfiguration:
                 unavailable = True
         return web.json_response(self.runtime.dashboard() | {"addon": None if unavailable else self.info_cache,
                                 "architecture": platform.machine(), "configured": len(self.runtime.key) >= 32})
+
+    async def update_policy(self, request):
+        return await self.runtime.change_update_policy(await request.json())
 
     async def program_state(self, request):
         identity = str(uuid.UUID(request.match_info["id"]))

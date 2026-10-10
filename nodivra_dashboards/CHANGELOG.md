@@ -1,3 +1,19 @@
+## 0.5.0
+
+- Gemeinsame, palettenabhängige SVG-Symbole und dezente Wetter-/Zustandsanimationen.
+- Einstellbare Symbole, Farben, Tempo und bis zu acht Zustands-/Schwellenwertregeln pro Karte.
+- Geräteklassen, Einheiten und lesbare Zustände für Wertkarten. Unbekannte Werte bleiben ohne aktive Effekte.
+
+## 0.4.0
+
+- Logo je Seite ausblendbar; Navigationsschalter bleibt rechts auf Höhe des Dashboard-Titels erreichbar.
+
+- Einklappbare Navigation mit Menü-Symbol rechts im Header; auf dem Handy standardmäßig geschlossen. Farben folgen dem Dashboard.
+- Ansicht ohne HA-Rahmen im eigenen Tab öffnen. Normalen Verbindungsstatus ausgeblendet. Zahlen und Einheiten bleiben auf einer Zeile.
+
+- Gemeinsame Kartenstile für alle Komponenten: Dashboard-Vorgabe mit optionalen individuellen Abweichungen. Standard, Minimal, Kompakt und Detail.
+- Wetter- und Wertkarten nutzen identische Typografie und Abstände. Bestehende Darstellungen bleiben erhalten.
+
 ## 0.3.1
 
 - Logo wie in der Mac-App, mit korrekt ausgerichtetem Haus und Untertitel.

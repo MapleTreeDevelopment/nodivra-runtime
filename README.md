@@ -1,14 +1,21 @@
-# Nodivra Runtime 0.11.0 und Nodivra Dashboards 0.2.0
+# Nodivra Runtime 0.14.0 und Nodivra Dashboards 0.5.0
 
-## Neu: Dashboard-Designs und eigene Browser-Seite
+## Neu in diesen Versionen
 
-Vier Designvorlagen mit Hell-/Dunkelmodus, Szenen, Raumklima und Runtime-Helligkeitswerten. Nodivra Dashboards 0.2.0 bietet optional einen eigenen Browser-Zugang mit Einmalcode-Kopplung.
+- Gemeinsame Kartenstile, 37 Symbolmotive, Wetteranimationen und bis zu acht Zustands-/Schwellwertregeln je Karte. Farben und Effekte folgen dem Dashboard-Design.
+- Mobile Darstellung und einklappbare Navigation, optionales Logo pro Seite; das Menü bleibt erreichbar.
+- Alle deaktivierten oder ausgewählte Automationen gesammelt aktivieren, mit Einzelmeldungen bei Fehlern.
+- Update-Auswahl zum einmaligen Fortsetzen zuvor aktiver Automationen. Diese Auswahl benötigt Runtime 0.14.0 als Ausgangsversion und steht danach für weitere Updates bereit. Beim ersten Upgrade gelten die bisherigen Neustartregeln.
+
+Vor dem Update eine vollständige HA-Sicherung erstellen. Zuerst Runtime 0.14.0, danach Nodivra Dashboards 0.5.0 aktualisieren. Die neuen Designoptionen werden mit Nodivra für Mac 0.26.0 eingestellt.
+
+[Entity-Abdeckung und Darstellungsgrenzen](docs/DASHBOARD-ENTITY-COVERAGE.md)
 
 ## Eigener Dashboard-Webdienst
 
-**Nodivra Dashboards** ist eine zusätzliche Home-Assistant-App mit eigenem Webdienst und Seitenleisteneintrag. Die gemeinsame Runtime 0.11.0 speichert weiterhin alle Entwürfe, veröffentlichten Dashboards und Versionen und übernimmt Geräteaktionen. Ein Update des Webdienstes benötigt keinen Neustart der Automationsengine. Die bisherige integrierte Dashboard-Ansicht bleibt als Rückfallmöglichkeit verfügbar.
+**Nodivra Dashboards** ist eine zusätzliche Home-Assistant-App mit eigenem Webdienst und Seitenleisteneintrag. Die gemeinsame Runtime speichert weiterhin alle Entwürfe, veröffentlichten Dashboards und Versionen und übernimmt Geräteaktionen. Ein Update des Webdienstes benötigt keinen Neustart der Automationsengine. Dashboards werden ausschließlich über Nodivra Dashboards geöffnet; die Runtime-Oberfläche verwaltet Automationen und Einstellungen.
 
-Nach einer vollständigen HA-Sicherung die Runtime auf 0.11.0 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.2.0** installieren. In der Mac-App **Nodivra 0.23 → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
+Nach einer vollständigen HA-Sicherung die Runtime auf 0.14.0 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.5.0** installieren. In der Mac-App **Nodivra 0.23 → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
 
 Der zusätzliche Dienst hat standardmäßig keinen freigegebenen LAN-Port, keine eigene Automationsengine und keine Supervisor-Verwaltungsrechte. Zugriff erfolgt über HA Ingress mit einem Administratorkonto; optional ist eine eigene Browser-Seite für gekoppelte Browser verfügbar. Der Browser erhält keine Runtime-Zugangsschlüssel. Vorhandene Dashboard-Daten müssen weder kopiert noch erneut veröffentlicht werden.
 
@@ -19,7 +26,7 @@ Der zusätzliche Dienst hat standardmäßig keinen freigegebenen LAN-Port, keine
 
 Eigenständige Dashboards aus der Mac-App werden zentral auf der Runtime gespeichert und über Home Assistant Ingress dargestellt. Entwürfe, Veröffentlichung und Versionen sind getrennt; frühere Fassungen lassen sich als Entwurf wiederherstellen. Desktop, Tablet und Handy besitzen eigene Anordnungen.
 
-Licht, Schalter, Werte, Texte, Bilder, Kamera-Einzelbilder/MJPEG und animierte Livegraphen verwenden dieselbe Darstellung wie die Mac-Vorschau. Zugriff zunächst über ein HA-Administratorkonto; noch kein separater Tablet-Zugang, HLS/WebRTC oder Audio. Graphen zeigen bis zu 120 Messpunkte seit dem Öffnen, keine Recorder-Historie.
+Licht, Schalter, Werte, Texte, Bilder, Kamera-Einzelbilder/MJPEG und animierte Livegraphen verwenden dieselbe Darstellung wie die Mac-Vorschau. Zugriff zunächst über ein HA-Administratorkonto; optional eigener Zugang für gekoppelte Browser; kein HLS/WebRTC oder Audio. Graphen zeigen bis zu 120 Messpunkte seit dem Öffnen, keine Recorder-Historie.
 
 Vor dem Update eine vollständige HA-Sicherung erstellen. Automationsdaten bleiben erhalten; beim Neustart gelten die vorhandenen Wiederanlaufregeln. Dashboard-Daten liegen separat in `dashboards.sqlite` und werden vor Änderungen automatisch gesichert.
 

@@ -1,3 +1,18 @@
+## 0.14.0
+
+- Gemeinsame, palettenabhängige SVG-Symbole und dezente Wetter-/Zustandsanimationen.
+- Einstellbare Symbole, Farben, Tempo und bis zu acht Zustands-/Schwellenwertregeln pro Karte.
+- Geräteklassen, Einheiten und lesbare Zustände für Wertkarten. Unbekannte Werte bleiben ohne aktive Effekte.
+- Versionsgebundene Update-Auswahl: zuvor aktive Automationen mit bestätigten Zuständen fortsetzen oder deaktiviert lassen.
+- Alle oder ausgewählte Automationen gemeinsam aktivieren; Einzelprüfungen und Fehler bleiben sichtbar.
+
+## 0.13.0
+
+- Logo je Seite ausblendbar; Navigationsschalter bleibt rechts auf Höhe des Dashboard-Titels erreichbar.
+
+- Gemeinsame Kartenstile für alle Komponenten: Dashboard-Vorgabe mit optionalen individuellen Abweichungen. Standard, Minimal, Kompakt und Detail.
+- Wetter- und Wertkarten nutzen identische Typografie und Abstände. Bestehende Darstellungen bleiben erhalten.
+
 ## 0.12.1
 
 - Gemeinsames Logo entspricht der Mac-App: flaches Haus neben Nodivra, Untertitel darunter.

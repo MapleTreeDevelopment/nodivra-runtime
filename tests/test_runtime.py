@@ -544,6 +544,42 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(.03)
         self.fail(str(self.runtime.record(identity)))
 
+    async def test_update_policy_resumes_only_enabled_once_without_changing_regular_policy(self):
+        active=await self.enable(await self.upload(self.plc_package()))
+        inactive=await self.upload(self.plc_package())
+        await self.request('POST','update-policy',dict(version='99.0.0',resume=True))
+        with patch.object(server, 'VERSION', '99.0.0'):
+            await self.restart();await self.wait_running(active['id'])
+        current=self.runtime.record(active['id'])
+        self.assertEqual(current['mode'],'observe');self.assertFalse(current['recovery']['retained']);self.assertFalse(current['recovery']['automatic'])
+        self.assertFalse(self.runtime.record(inactive['id'])['enabled']);self.assertIsNone(self.runtime.update_policy())
+        await self.restart();self.assertFalse(self.runtime.record(active['id'])['enabled'])
+        self.assertEqual(self.calls,[])
+
+    async def test_update_policy_off_overrides_automatic_restart_for_this_update(self):
+        r=await self.configure(await self.upload(self.plc_package()));await self.enable(r)
+        await self.request('POST','update-policy',dict(version='99.0.0',resume=False))
+        with patch.object(server, 'VERSION', '99.0.0'): await self.restart()
+        current=self.runtime.record(r['id']);self.assertFalse(current['enabled']);self.assertFalse(current['recovery']['pending']);self.assertTrue(current['recovery']['automatic'])
+
+    async def test_update_policy_does_not_apply_to_regular_restart_and_manual_pause_wins(self):
+        r=await self.enable(await self.upload(self.plc_package()))
+        await self.request('POST','update-policy',dict(version='99.0.0',resume=True))
+        await self.restart();self.assertFalse(self.runtime.record(r['id'])['enabled'])
+        r=await self.enable(self.runtime.record(r['id']))
+        await self.request('POST','update-policy',dict(version='99.0.0',resume=True))
+        r=self.runtime.record(r['id']);await self.request('POST','automations/'+r['id']+'/state',dict(enabled=False,mode=r['mode'],expectedRevision=r['revision'],expectedStateVersion=r['stateVersion']))
+        with patch.object(server, 'VERSION', '99.0.0'): await self.restart()
+        self.assertFalse(self.runtime.record(r['id'])['enabled']);self.assertFalse(self.runtime.record(r['id'])['recovery']['pending'])
+
+    async def test_update_policy_rejects_unconfirmed_checkpoint(self):
+        r=await self.enable(await self.upload(self.plc_package()))
+        with patch.object(self.runtime, 'save_checkpoint', new=AsyncMock()):
+            await self.request('POST','update-policy',dict(version='99.0.0',resume=True),409)
+        self.assertIsNone(self.runtime.update_policy())
+        await self.request('POST','update-policy',dict(version=server.VERSION,resume=True),422)
+        await self.request('POST','update-policy',dict(version='99.0.0',resume='true'),422)
+
     async def test_retained_virtual_inputs_and_marker_survive_restart(self):
         p=self.plc_package();r=await self.upload(p);r=await self.configure(r);await self.enable(r)
         source=p['graph']['blocks'][0]

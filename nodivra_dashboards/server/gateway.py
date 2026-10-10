@@ -10,7 +10,7 @@ from browser_access import BrowserAccess
 from pathlib import Path
 from aiohttp import web, ClientSession, ClientTimeout, ClientError
 
-VERSION = "0.3.1"
+VERSION = "0.5.0"
 MAX_RESPONSE = 8 * 1024 * 1024
 
 
@@ -90,18 +90,20 @@ class DashboardGateway:
     async def page(self, request):
         folder = Path(__file__).with_name("dashboard_web")
         css = (folder / "renderer.css").read_text() + (folder / "navigation.css").read_text()
-        js = (folder / "renderer.js").read_text()
+        js = (folder / "renderer.js").read_text() + "\n" + Path(__file__).with_name("navigation.js").read_text()
         # Only the session CSRF nonce reaches the browser; no Runtime credential.
-        body = """<aside class="tool-sidebar"><div class="tool-brand"><span class="tool-brand-mark"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M50 2 98 39H87V98H60V64H40V98H13V39H2Z"/></svg></span><div><strong>Nodivra</strong><small>Dashboards</small></div></div>
+        body = """<header class="viewer-header"><div class="tool-brand"><span class="tool-brand-mark"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M50 2 98 39H87V98H60V64H40V98H13V39H2Z"/></svg></span><div><strong>Nodivra</strong><small>Dashboards</small></div></div><button id="navigation-toggle" aria-label="Navigation einblenden" aria-controls="viewer-navigation" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M13 9l3 3-3 3"/></svg></button></header>
+        <button class="navigation-backdrop" id="navigation-backdrop" aria-label="Navigation schließen" hidden></button>
+        <aside class="tool-sidebar" id="viewer-navigation" hidden>
         <nav aria-label="Nodivra Navigation"><a class="tool-link" href="./" aria-current="page">Dashboards</a></nav>
         <nav id="dashboard-page-nav" aria-label="Dashboard-Seiten" hidden></nav>
-        <nav class="tool-settings"><span class="tool-link">Webdienst 0.3.1 · Gemeinsame Runtime</span></nav></aside><main id="dashboard"></main>"""
+        <nav class="tool-settings"><a id="open-unframed" class="tool-link" target="_blank" rel="noopener noreferrer" hidden>Ohne HA-Rahmen öffnen ↗</a></nav></aside><main id="dashboard"></main>"""
         controls = ""
         if request.get('browser_user'):
             controls = '<button id="browser-logout" class="dash-link">Browser abmelden</button>'
         elif self.standalone_mode != "disabled":
             controls = '<button id="browser-pair" class="dash-link">Browser verbinden</button><button id="browser-revoke" class="dash-link">Alle Browser abmelden</button>'
-        body += '<div class="browser-tools">'+controls+'<p id="browser-result" role="status"></p></div>'
+        body = body.replace('</aside>', '<div class="browser-tools">'+controls+'<p id="browser-result" role="status"></p></div></aside>')
         browser_script = """
         const api=async(path,body={})=>{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Nodivra-CSRF':CSRF},body:JSON.stringify(body)});if(!r.ok)throw Error('Anfrage nicht bestätigt. Verbindung prüfen.');return r.json();};
         const feedback=document.getElementById('browser-result');
@@ -109,7 +111,7 @@ class DashboardGateway:
         document.getElementById('browser-revoke')?.addEventListener('click',async()=>{if(!confirm('Alle gekoppelten Browser abmelden?'))return;try{await api('api/browser/revoke');feedback.textContent='Alle Browser wurden abgemeldet.';}catch(e){feedback.textContent=e.message;}});
         document.getElementById('browser-logout')?.addEventListener('click',async()=>{try{await api('api/browser/logout');location.reload();}catch(e){feedback.textContent=e.message;}});
         """.replace(':CSRF', ':'+json.dumps(self.csrf))
-        return web.Response(text="<!doctype html><html lang='de'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Nodivra Dashboards</title><style>"+css+"</style></head><body class='tool-layout'>"+body+"<script nonce='"+self.csrf+"'>"+js+"\n"+browser_script+"\nNodivra.boot("+json.dumps({"mode":"viewer", "csrf":self.csrf})+");</script></body></html>", content_type="text/html")
+        return web.Response(text="<!doctype html><html lang='de'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'><title>Nodivra Dashboards</title><style>"+css+"</style></head><body class='tool-layout dashboard-viewer navigation-collapsed'>"+body+"<script nonce='"+self.csrf+"'>"+js+"\n"+browser_script+"\nNodivra.boot("+json.dumps({"mode":"viewer", "csrf":self.csrf})+");</script></body></html>", content_type="text/html")
 
     async def browser_pair(self, request):
         if self.standalone_mode == "disabled": raise web.HTTPForbidden()
@@ -145,7 +147,7 @@ class DashboardGateway:
             await self.check(request)
             return await self.page(request)
         nonce = self.csrf
-        html = """<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nodivra · Browser verbinden</title>
+        html = """<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Nodivra · Browser verbinden</title>
         <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#171d20;color:#eef1f4;font:14px -apple-system,BlinkMacSystemFont,sans-serif}main{max-width:360px;padding:32px}h1{font-size:23px;font-weight:400}p{line-height:1.6;color:#aab5bf}input,button{font:inherit;padding:12px;border-radius:9px;border:1px solid #414950;box-sizing:border-box;width:100%;margin-top:10px}input{background:#242b30;color:white}button{background:#1673ff;color:white;cursor:pointer}</style>
         <main><h1><svg width="20" height="17" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="fill:#1673ff;margin-right:8px"><path d="M50 2 98 39H87V98H60V64H40V98H13V39H2Z"/></svg>Nodivra Dashboards</h1><p>Öffne Nodivra Dashboards in Home Assistant und wähle „Browser verbinden“. Gib hier den fünf Minuten gültigen Einmalcode ein.</p><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" aria-label="Einmalcode" placeholder="Einmalcode"><button id="login">Verbinden</button><p id="result" role="status"></p></main>
         <script nonce="NONCE">document.getElementById('login').onclick=async()=>{const b=document.getElementById('login');b.disabled=true;try{const r=await fetch('api/browser/login',{method:'POST',headers:{'Content-Type':'application/json','X-Nodivra-CSRF':CSRF},body:JSON.stringify({code:document.getElementById('code').value.trim()})});if(r.ok){location.reload();return;}document.getElementById('result').textContent='Verbindung nicht bestätigt. Code und Runtime prüfen.';}catch(e){document.getElementById('result').textContent='Webdienst nicht erreichbar.';}finally{b.disabled=false;}};</script></html>"""

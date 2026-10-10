@@ -7,6 +7,7 @@ import hmac
 import json
 import math
 import os
+import re
 from pathlib import Path
 import sqlite3
 import sys
@@ -18,7 +19,7 @@ from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dashboards import DashboardService, DashboardError
 
-VERSION = "0.12.1"
+VERSION = "0.14.0"
 from dashboard_access import display_key, display_request
 
 def canonical(value):
@@ -298,6 +299,16 @@ class Runtime:
         INSERT OR IGNORE INTO program_recovery(id) SELECT id FROM programs;
         UPDATE program_recovery SET requested=auto_restart WHERE id IN (SELECT id FROM programs WHERE enabled=1);
         """)
+        if "update_restart" not in {row[1] for row in self.db.execute("PRAGMA table_info(program_recovery)")}:
+            self.db.execute("ALTER TABLE program_recovery ADD COLUMN update_restart INTEGER NOT NULL DEFAULT 0")
+        policy_row = self.db.execute("SELECT value FROM meta WHERE key='update_policy'").fetchone()
+        policy = json.loads(policy_row[0]) if policy_row else None
+        self.db.execute("UPDATE program_recovery SET update_restart=0 WHERE requested=0")
+        if policy and policy.get("version") == VERSION:
+            # Only programs still enabled at shutdown qualify; a user's pause wins.
+            self.db.execute("UPDATE program_recovery SET requested=?,update_restart=? WHERE id IN (SELECT id FROM programs WHERE enabled=1)", (policy["resume"], policy["resume"]))
+            if not policy["resume"]: self.db.execute("UPDATE program_recovery SET requested=0,update_restart=0")
+            self.db.execute("DELETE FROM meta WHERE key='update_policy'")
         if not self.db.execute("SELECT value FROM meta WHERE key='serverID'").fetchone():
             self.db.execute("INSERT INTO meta VALUES ('serverID',?)", (str(uuid.uuid4()),))
         self.server_id = self.db.execute("SELECT value FROM meta WHERE key='serverID'").fetchone()[0]
@@ -345,7 +356,7 @@ class Runtime:
         records = self.records()
         return {"version": VERSION, "protocolVersion": 5, "serverID": self.server_id,
                 "homeAssistantVersion": self.ha.version, "homeAssistantConnected": self.ha.connected,
-                "startedAt": self.started, "restartPolicy": "per_program", "observedAt": time.time(),
+                "startedAt": self.started, "restartPolicy": "per_program", "observedAt": time.time(), "updatePolicy": self.update_policy(),
                 "engineReady": self.engine.process is not None and self.engine.process.returncode is None,
                 "automations": [{k: v for k, v in record.items() if k != "package"} |
                                 {"title": record["package"]["graph"]["title"],
@@ -480,7 +491,7 @@ class Runtime:
                     if result["commands"]:
                         # Commit BEFORE any external side effect. A crash at any point
                         # until a settled checkpoint requires manual review, never replay.
-                        self.db.execute("UPDATE program_recovery SET blocked=1 WHERE id=? AND retained=1", (identity,))
+                        self.db.execute("UPDATE program_recovery SET blocked=1 WHERE id=? AND (retained=1 OR update_restart=1)", (identity,))
                         self.db.commit()
                     await self.perform_commands(identity, record, result)
                     if identity not in self.running:
@@ -570,6 +581,7 @@ class Runtime:
         app.router.add_get("/api/v1/status", self.status)
         app.router.add_get("/api/v1/automations", self.list_programs)
         app.router.add_post("/api/v1/validate", self.check)
+        app.router.add_post("/api/v1/update-policy", self.set_update_policy)
         app.router.add_put("/api/v1/automations/{id}", self.transfer)
         app.router.add_get("/api/v1/automations/{id}", self.get_program)
         app.router.add_post("/api/v1/automations/{id}/state", self.set_state)
@@ -591,7 +603,7 @@ class Runtime:
         return web.json_response({"service": "nodivra-runtime", "version": VERSION}, status=200 if ready else 503)
 
     async def status(self, request):
-        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "dashboards.documents.v1", "dashboards.display.v1", "dashboards.weather.v1", "dashboards.designer.v2"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
+        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "dashboards.documents.v1", "dashboards.display.v1", "dashboards.card-styles.v1", "dashboards.visual-rules.v1", "automations.update-resume.v1", "dashboards.page-branding.v1", "dashboards.weather.v1", "dashboards.designer.v2"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
 
     async def list_programs(self, request):
         return web.json_response({"automations": self.records()})
@@ -633,7 +645,7 @@ class Runtime:
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO revisions VALUES(?,?,?,?)", (identity, revision, text, time.time()))
                 self.db.execute("INSERT OR REPLACE INTO programs VALUES(?,?,?,0,'observe',NULL,?)", (identity, revision, text, time.time()))
-                self.db.execute("INSERT INTO program_recovery(id) VALUES(?) ON CONFLICT(id) DO UPDATE SET requested=0,checkpoint=NULL,revision=NULL,mode=NULL,captured=NULL,blocked=0", (identity,))
+                self.db.execute("INSERT INTO program_recovery(id) VALUES(?) ON CONFLICT(id) DO UPDATE SET requested=0,update_restart=0,checkpoint=NULL,revision=NULL,mode=NULL,captured=NULL,blocked=0", (identity,))
                 self.db.execute("INSERT INTO program_metadata(id,created) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET control_version=control_version+1", (identity, time.time()))
                 result = self.record(identity)
                 self.db.execute("INSERT INTO transfers VALUES(?,?,?)", (request_id, digest, canonical(result)))
@@ -642,6 +654,36 @@ class Runtime:
                 self.db.execute("DELETE FROM transfers WHERE rowid NOT IN (SELECT rowid FROM transfers ORDER BY rowid DESC LIMIT 1000)")
             self.event(identity, "transfer", "Programm geprüft und deaktiviert gespeichert. Vorherige Fassungen bleiben gesichert.")
             return web.json_response(result)
+
+    def update_policy(self):
+        row = self.db.execute("SELECT value FROM meta WHERE key='update_policy'").fetchone()
+        return json.loads(row[0]) if row else None
+
+    async def set_update_policy(self, request):
+        return await self.change_update_policy(await request.json())
+
+    async def change_update_policy(self, data):
+        if not isinstance(data, dict) or type(data.get("resume")) is not bool or not isinstance(data.get("version"), str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", data["version"]) or data["version"] == VERSION:
+            return problem(422, "Eine andere Zielversion und die Neustartauswahl sind erforderlich.")
+        # Persist confirmed checkpoints before allowing the Supervisor update.
+        # Temporary retention does not change the user's regular restart settings.
+        for record in self.records():
+            if not record["enabled"]: continue
+            async with self.lock(record["id"]):
+                latest = self.record(record["id"])
+                if not latest["enabled"]: continue
+                self.db.execute("UPDATE program_recovery SET update_restart=? WHERE id=?", (data["resume"], record["id"]))
+                self.db.commit()
+                if data["resume"]:
+                    before = time.time()
+                    await self.save_checkpoint(record["id"], force=True)
+                    info = self.recovery_info(record["id"])
+                    if info["blocked"] or not info["available"] or (info["captured"] or 0) < before:
+                        return problem(409, "Ein Ablauf wird noch ausgeführt. Vor dem Update erneut prüfen; kein Update wurde freigegeben.")
+        policy = dict(version=data["version"], resume=data["resume"])
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('update_policy',?)", (canonical(policy),))
+        return web.json_response({"saved": True, **policy})
 
     async def set_state(self, request):
         identity = request.match_info["id"]
@@ -659,10 +701,10 @@ class Runtime:
                 return problem(409, "Die Serverfassung stimmt nicht mit der Vorschau überein.")
             if "expectedStateVersion" in data and (type(data["expectedStateVersion"]) is not int or data["expectedStateVersion"] != record["stateVersion"]):
                 return problem(409, "Der Ausführungsstatus wurde geändert. Bitte neu laden und erneut auswählen.")
-            if automatic and (not record["recovery"]["pending"] or not record["recovery"]["automatic"] or record["recovery"]["blocked"]):
+            if automatic and (not record["recovery"]["pending"] or not (record["recovery"]["automatic"] or record["recovery"].get("updatePending")) or record["recovery"]["blocked"]):
                 return problem(409, "Kein freigegebener Wiederanlauf.")
             if not data["enabled"]:
-                self.db.execute("UPDATE program_recovery SET requested=0 WHERE id=?", (identity,))
+                self.db.execute("UPDATE program_recovery SET requested=0,update_restart=0 WHERE id=?", (identity,))
                 self.db.commit()
                 if record["enabled"]:
                     await self.pause(identity, "Vom Nutzer pausiert.")
@@ -694,7 +736,7 @@ class Runtime:
                     if b["kind"] in ("digitalInput", "analogInput") and not b.get("entityID"):
                         value = b.get("options", {}).get("initial", False if b["kind"] == "digitalInput" else 0)
                         virtual[self.input_key(b)] = ("on" if value else "off") if b["kind"] == "digitalInput" else str(value)
-                saved = self.db.execute("SELECT checkpoint,revision,mode,blocked FROM program_recovery WHERE id=? AND retained=1", (identity,)).fetchone()
+                saved = self.db.execute("SELECT checkpoint,revision,mode,blocked FROM program_recovery WHERE id=? AND (retained=1 OR update_restart=1)", (identity,)).fetchone()
                 checkpoint = None
                 if saved and saved[3]:
                     return problem(409, "Der letzte Ablauf war nicht vollständig bestätigt. Geräte prüfen und den gespeicherten Zustand unter ‚Neustart & Speicher‘ zurücksetzen.")
@@ -719,7 +761,7 @@ class Runtime:
                 self.running[identity] = time.monotonic() - snapshot["time"]
                 self.db.execute("UPDATE programs SET enabled=1,mode=?,error=NULL WHERE id=?", (mode, identity))
                 self.db.execute("UPDATE program_metadata SET control_version=control_version+1 WHERE id=?", (identity,))
-                self.db.execute("UPDATE program_recovery SET requested=auto_restart WHERE id=?", (identity,))
+                self.db.execute("UPDATE program_recovery SET requested=auto_restart,update_restart=0 WHERE id=?", (identity,))
                 self.db.commit()
                 await self.save_checkpoint(identity, force=True)
                 if checkpoint:
@@ -728,13 +770,13 @@ class Runtime:
             return web.json_response(self.record(identity))
 
     def recovery_info(self, identity):
-        row = self.db.execute("SELECT retained,auto_restart,requested,captured,blocked,checkpoint IS NOT NULL FROM program_recovery WHERE id=?", (identity,)).fetchone()
+        row = self.db.execute("SELECT retained,auto_restart,requested,captured,blocked,checkpoint IS NOT NULL,update_restart FROM program_recovery WHERE id=?", (identity,)).fetchone()
         if not row:
             return dict(retained=False, automatic=False, pending=False, captured=None, blocked=False, available=False)
-        return dict(retained=bool(row[0]), automatic=bool(row[1]), pending=bool(row[2]) and identity not in getattr(self, "running", {}), captured=row[3], blocked=bool(row[4]), available=bool(row[5]))
+        return dict(retained=bool(row[0]), automatic=bool(row[1]), pending=bool(row[2]) and identity not in getattr(self, "running", {}), captured=row[3], blocked=bool(row[4]), available=bool(row[5]), updatePending=bool(row[6]))
 
     async def save_checkpoint(self, identity, force=False):
-        if not self.recovery_info(identity)["retained"]:
+        if not (self.recovery_info(identity)["retained"] or self.recovery_info(identity).get("updatePending")):
             return
         if not force and time.monotonic() - self.saved_at.get(identity, 0) < 1:
             return
