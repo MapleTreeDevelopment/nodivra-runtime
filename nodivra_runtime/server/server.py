@@ -14,7 +14,7 @@ import uuid
 from collections import deque
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
@@ -209,7 +209,7 @@ class HomeAssistant:
         domain, service = action.split(".", 1)
         return service in self.services.get(domain, {})
 
-    async def action(self, configuration):
+    async def action(self, configuration, on_sent=None):
         if not self.connected or not self.ws:
             raise RuntimeError("Home Assistant ist nicht verbunden")
         action = configuration.get("action", configuration.get("service", ""))
@@ -225,6 +225,8 @@ class HomeAssistant:
             if "target" in configuration:
                 request["target"] = configuration["target"]
             await self.ws.send_json(request)
+            if on_sent:
+                on_sent()
             result = await asyncio.wait_for(future, 8)
             if not result.get("success"):
                 raise RuntimeError("Home Assistant hat die Aktion abgelehnt")
@@ -288,6 +290,7 @@ class Runtime:
         self.inputs = {}
         self.running = {}
         self.snapshots = {}
+        self.action_status = {}
         self.tasks = {}
         self.actions = deque()
         self.ticker = None
@@ -442,6 +445,8 @@ class Runtime:
                     result = await self.engine.call(op="step", id=identity, now=time.monotonic()-start, date=time.time(), states=states)
                     self.snapshots[identity] = result | {"observedAt": time.time()}
                     if result.get("fault"):
+                        if result.get("faultBlockID"):
+                            self.event(identity, "block_failed", result["fault"], result["faultBlockID"])
                         await self.pause(identity, result["fault"])
                         return
                     if result["commands"]:
@@ -458,29 +463,44 @@ class Runtime:
             except Exception:
                 await self.pause(identity, "Ausführungsfehler. Automation pausiert; keine automatische Wiederholung.")
 
+    def action_update(self, identity, command, status, message):
+        self.action_status.setdefault(identity, {})[command["blockID"]] = dict(status=status, message=message, updatedAt=time.time())
+
     async def perform_commands(self, identity, record, result):
         for command in result["commands"]:
             now = time.monotonic()
             while self.actions and now-self.actions[0] >= 60:
                 self.actions.popleft()
             if len(self.actions) >= 120:
-                await self.pause(identity, "Globale Schutzgrenze: höchstens 120 Aktionen pro Minute.")
+                message = "Nicht gesendet: globale Schutzgrenze von 120 Aktionen pro Minute."
+                self.action_update(identity, command, "failed", message)
+                self.event(identity, "action_failed", message, command["blockID"])
+                await self.pause(identity, message)
                 return
             self.actions.append(now)
             config = command["configuration"]
             action = config.get("action", config.get("service", ""))
             if action == "nodivra.log":
                 self.event(identity, "log", config["data"]["message"], command["blockID"])
+                self.action_update(identity, command, "logged", "Protokolleintrag erstellt · kein Geräteaufruf.")
             elif record["mode"] == "observe":
                 self.event(identity, "observe", "Würde ausführen: " + action, command["blockID"])
+                self.action_update(identity, command, "observed", "Nur beobachtet · kein Geräteaufruf.")
             else:
                 try:
-                    await self.ha.action(config)
+                    def sent():
+                        self.action_update(identity, command, "sent", "Aufruf gesendet · Bestätigung ausstehend.")
+                        self.event(identity, "action_sent", "Aufruf gesendet: " + action, command["blockID"])
+                    await self.ha.action(config, on_sent=sent)
                 except Exception:
+                    message = "Fehlgeschlagen oder nicht bestätigt: " + action + ". Gerätezustand nicht sicher bekannt; keine Wiederholung."
+                    self.action_update(identity, command, "failed", message)
+                    self.event(identity, "action_failed", message, command["blockID"])
                     await self.engine.call(op="ack", id=identity, commandID=command["id"], success=False)
                     await self.pause(identity, "Aktion abgelehnt oder Ausgang unbekannt. Keine Wiederholung. Bitte Gerät und Verbindung prüfen.")
                     return
-                self.event(identity, "action", "Home Assistant bestätigt: " + action, command["blockID"])
+                self.event(identity, "action", "Home Assistant bestätigt: " + action + ". Gerätezustand nicht geprüft.", command["blockID"])
+                self.action_update(identity, command, "confirmed", "Von Home Assistant bestätigt · Gerätezustand nicht geprüft.")
             await self.engine.call(op="ack", id=identity, commandID=command["id"], success=True)
 
     async def validate(self, package):
@@ -648,6 +668,7 @@ class Runtime:
                 self.virtual_values[identity] = virtual
                 snapshot = await self.engine.call(op="load", id=identity, package=record["package"], states=states, date=time.time(), checkpoint=checkpoint)
                 self.snapshots[identity] = snapshot | {"observedAt": time.time()}
+                self.action_status[identity] = {}
                 self.cursors[identity] = self.ha.sequence
                 self.input_states[identity] = dict(self.ha.states)
                 self.inputs[identity] = set(check["inputs"])
@@ -788,7 +809,7 @@ class Runtime:
             return problem(409, "Die Automation läuft gerade nicht.")
         if time.time() - self.snapshots[identity]["observedAt"] > 3:
             return problem(409, "Kein aktueller Ausführungsstand. Live-Anzeige vorübergehend ausgesetzt.")
-        return web.json_response(self.snapshots[identity] | {"revision": self.record(identity)["revision"]})
+        return web.json_response(self.snapshots[identity] | {"revision": self.record(identity)["revision"], "actions": self.action_status.get(identity, {})})
 
 def main():
     path = os.environ.get("NODIVRA_DATA", "/data")

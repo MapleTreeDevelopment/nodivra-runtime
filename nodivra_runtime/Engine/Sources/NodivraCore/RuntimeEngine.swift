@@ -16,6 +16,8 @@ public struct RuntimeSnapshot: Codable, Sendable {
     public var pending: [String]
     public var commands: [RuntimeCommand]
     public var fault: String?
+    public var diagnostics: [String: RuntimeBlockDiagnostic]?
+    public var faultBlockID: String?
 }
 
 /// Pure state machine. No sockets, HA services, helpers or filesystem access.
@@ -32,27 +34,33 @@ public struct RuntimeEngine: Sendable {
     private var followConfigurations: [UUID: ConfigValue] = [:]
     private var followSignals: [UUID: Bool] = [:]
     public private(set) var cycle: UInt64 = 0
-    private var functions: [UUID: PLCFunctionState] = [:]
+    var functions: [UUID: PLCFunctionState] = [:]
     private var functionRemaining: [UUID: Double] = [:]
     private var markerValues: [UUID: ConfigValue] = [:]
     private var previousAnalog: [UUID: Double] = [:]
     public private(set) var fault: String?
+    public private(set) var faultBlockID: UUID?
     private var ordered: [Block]
     private var calendar: Calendar
     private var lastStates: [String: String]
     private var previous: [UUID: Bool] = [:]
-    private var deadlines: [UUID: Double] = [:]
+    var deadlines: [UUID: Double] = [:]
     private var completions: [UUID: Double] = [:]
     private var pending: [UUID: RuntimeCommand] = [:]
     private var memory: [UUID: Bool] = [:]
     private var clockStamp: [UUID: Int] = [:]
     private var actionTimes: [Double] = []
     private var lastNow: Double = 0
+    var diagnosticWires: [UUID: [Int: Wire]] = [:]
+    var timerDiagnostics: [UUID: RuntimeTimerDiagnostic] = [:]
+    var diagnosticTimerBlocks: [Block] = []
     public init(package: RuntimePackage, states: [String: String] = [:], date: Date = Date()) throws {
         let v = RuntimeCompiler.validate(package)
         guard v.valid else { throw CompilationError(diagnostics: v.issues.map { .init($0.message, blockID: $0.blockID) }) }
         self.package = package; validation = v; self.states = states; lastStates = states; self.date = date
         ordered = RuntimeCompiler.ordered(package.graph)
+        diagnosticTimerBlocks = package.graph.blocks.filter(\.isDiagnosticTimer)
+        for wire in package.graph.wires { diagnosticWires[wire.target, default: [:]][wire.input] = wire }
         calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: package.timeZone)!
         for b in package.graph.blocks where b.kind.isMarker { markerValues[b.id] = b.kind == .marker ? .bool(false) : .number(0) }
         _ = evaluate(seed: true)
@@ -66,7 +74,7 @@ public struct RuntimeEngine: Sendable {
         return .init(version: 1, package: package, time: time, cycle: cycle, functions: functions,
                      markers: markerValues, previous: previous, previousAnalog: previousAnalog,
                      deadlines: deadlines, memory: memory, followConfigurations: followConfigurations,
-                     followSignals: followSignals, actionTimes: actionTimes)
+                     followSignals: followSignals, actionTimes: actionTimes, timerDiagnostics: timerDiagnostics)
     }
     public init(package: RuntimePackage, checkpoint: RuntimeCheckpoint, states: [String: String], date: Date) throws {
         guard checkpoint.version == 1, checkpoint.package == package, checkpoint.time.isFinite, checkpoint.time >= 0 else {
@@ -79,33 +87,36 @@ public struct RuntimeEngine: Sendable {
         deadlines = checkpoint.deadlines; memory = checkpoint.memory
         followConfigurations = checkpoint.followConfigurations; followSignals = checkpoint.followSignals
         actionTimes = checkpoint.actionTimes
+        timerDiagnostics = checkpoint.timerDiagnostics ?? [:]
         // Reconcile current inputs without inventing edges during the interruption.
         // Timers use logical time, so downtime never consumes their remaining time.
         _ = evaluate(seed: true, restoring: true)
         lastStates = states
     }
     public func remaining(_ id: UUID) -> Double? { functionRemaining[id] ?? deadlines[id].map { max(0, $0 - time) } }
-    public mutating func step(now: Double, date: Date, states: [String: String]) -> RuntimeSnapshot {
-        guard fault == nil else { return snapshot([]) }
+    public mutating func step(now: Double, date: Date, states: [String: String], includeDiagnostics: Bool = true) -> RuntimeSnapshot {
+        guard fault == nil else { return snapshot([], includeDiagnostics: includeDiagnostics) }
         guard now.isFinite, now >= lastNow, now - lastNow <= 60 else {
-            fault = "Ausführung pausiert: Zeitbasis unterbrochen. Erneut aktivieren, um mit aktuellen Zuständen zu starten."; return snapshot([])
+            fault = "Ausführung pausiert: Zeitbasis unterbrochen. Erneut aktivieren, um mit aktuellen Zuständen zu starten."; return snapshot([], includeDiagnostics: includeDiagnostics)
         }
         time = now; lastNow = now; self.date = date; self.states = states
         cycle += 1
         let commands = evaluate(seed: false); lastStates = states
-        return snapshot(commands)
+        return snapshot(commands, includeDiagnostics: includeDiagnostics)
     }
     public mutating func acknowledge(_ commandID: UUID, success: Bool) {
         guard let pair = pending.first(where: { $0.value.id == commandID }) else { return }
         pending.removeValue(forKey: pair.key)
         if success { completions[pair.key] = time + 0.2 }
-        else { fault = "Aktion nicht bestätigt. Die Automation wurde pausiert; es erfolgt keine automatische Wiederholung." }
+        else { faultBlockID = pair.key; fault = "Aktion nicht bestätigt. Die Automation wurde pausiert; es erfolgt keine automatische Wiederholung." }
     }
-    public func snapshot(_ commands: [RuntimeCommand] = []) -> RuntimeSnapshot {
-        .init(time: time, signals: Dictionary(uniqueKeysWithValues: signals.map { ($0.key.uuidString, $0.value) }), analogSignals: Dictionary(uniqueKeysWithValues: analogSignals.map { ($0.key.uuidString, $0.value) }), parameterSignals: Dictionary(uniqueKeysWithValues: parameterSignals.map { ($0.key.uuidString, $0.value) }), cycle: cycle, remaining: Dictionary(uniqueKeysWithValues: deadlines.map { ($0.key.uuidString, max(0, $0.value - time)) }).merging(Dictionary(uniqueKeysWithValues: functionRemaining.map { ($0.key.uuidString, $0.value) }), uniquingKeysWith: { _, b in b }), pending: pending.keys.map(\.uuidString), commands: commands, fault: fault)
+    public func snapshot(_ commands: [RuntimeCommand] = [], includeDiagnostics: Bool = true) -> RuntimeSnapshot {
+        .init(time: time, signals: Dictionary(uniqueKeysWithValues: signals.map { ($0.key.uuidString, $0.value) }), analogSignals: Dictionary(uniqueKeysWithValues: analogSignals.map { ($0.key.uuidString, $0.value) }), parameterSignals: Dictionary(uniqueKeysWithValues: parameterSignals.map { ($0.key.uuidString, $0.value) }), cycle: cycle, remaining: Dictionary(uniqueKeysWithValues: deadlines.map { ($0.key.uuidString, max(0, $0.value - time)) }).merging(Dictionary(uniqueKeysWithValues: functionRemaining.map { ($0.key.uuidString, $0.value) }), uniquingKeysWith: { _, b in b }), pending: pending.keys.map(\.uuidString), commands: commands, fault: fault, diagnostics: includeDiagnostics ? blockDiagnostics() : nil, faultBlockID: faultBlockID?.uuidString)
     }
     private mutating func evaluate(seed: Bool, restoring: Bool = false) -> [RuntimeCommand] {
         var commands: [RuntimeCommand] = []
+        let priorEnds = Dictionary(uniqueKeysWithValues: diagnosticTimerBlocks.compactMap { b in diagnosticDeadline(b).map { (b.id, $0) } })
+        defer { updateTimerDiagnostics(previousEnds: priorEnds, restoring: restoring) }
         let g = package.graph
         // Publish the process image before evaluating any combinational block. Contacts
         // and direct marker outputs always expose exactly the same previous-cycle value.
@@ -116,6 +127,7 @@ public struct RuntimeEngine: Sendable {
         }
         for b in ordered {
             if b.kind.isMarker || b.kind.isContact { continue }
+            defer { if fault != nil && faultBlockID == nil { faultBlockID = b.id } }
 
             func input(_ pin: Int) -> Bool? {
                 guard let w = g.wires.first(where: { $0.target == b.id && $0.input == pin }) else {
@@ -388,4 +400,5 @@ public struct RuntimeCheckpoint: Codable, Sendable {
     var followConfigurations: [UUID: ConfigValue]
     var followSignals: [UUID: Bool]
     var actionTimes: [Double]
+    var timerDiagnostics: [UUID: RuntimeTimerDiagnostic]?
 }

@@ -20,7 +20,7 @@ public struct RuntimeValidation: Codable, Sendable {
     public var valid: Bool { issues.isEmpty }
 }
 public enum RuntimeCompiler {
-    public static let version = "0.7.0"
+    public static let version = "0.8.0"
     public static let catalogIDs: Set<String> = Set(["logic.digitalInput", "logic.analogInput", "logic.digitalOutput", "logic.analogOutput", "logic.marker", "logic.analogMarker", "logic.markerContact", "logic.analogContact", "logic.analogCompare", "logic.state", "logic.stateMatch", "logic.numeric", "logic.constant", "logic.timeWindow", "logic.button", "logic.and", "logic.or", "logic.xor", "logic.not", "logic.onDelay", "logic.offDelay", "logic.pulse", "logic.latch", "logic.output", "logic.darkness", "logic.motion", "logic.autoOff", "trigger.state", "trigger.time", "trigger.pattern", "condition.state", "condition.numeric", "condition.time", "action.service", "action.light", "action.delay", "runtime.log"]).union(PLCFunction.allCases.map { "plc." + $0.rawValue })
     public static func validate(_ package: RuntimePackage) -> RuntimeValidation {
         let g = package.graph

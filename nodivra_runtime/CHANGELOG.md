@@ -1,3 +1,12 @@
+# 0.8.0
+
+- Live-Diagnose für Logikeingänge: Ein/Aus, unbekannte Werte, fehlende und neutral unbeschaltete Eingänge, Negierung.
+- Timerdiagnose mit übernommener Zeitvorgabe, vergangener Zeit, Restzeit und Reset-/Abbruchursache; mit Remanenz erhalten.
+- Aktionsstatus unterscheidet gesendete, bestätigte, beobachtete und fehlgeschlagene Aufrufe. Eine HA-Bestätigung ist kein Nachweis des Gerätezustands.
+- Blockbezogene Sende-/Fehlerereignisse für die Navigation aus dem Mac-Protokoll. Nodivra 0.17 zeigt die Details; bestehende Programme und Protokoll 5 bleiben kompatibel.
+
+- Updatehinweis im Runtime-Dashboard vereinfacht: „Führe das Update aus, um die neusten Funktionen nutzen zu können.“
+
 # 0.7.0
 
 - „Neustart & Speicher“ je Automation: optionale Remanenz für Merker, Relais, Zähler, Funktionszustände, virtuelle Eingänge und laufende Timer.

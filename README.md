@@ -1,4 +1,4 @@
-# Nodivra Runtime 0.7.0
+# Nodivra Runtime 0.8.0
 
 HA-OS-App-Paket für amd64 und aarch64. Runtime 0.6 ergänzt ein Dashboard direkt in Home Assistant mit Versionsinformationen, dauerhaften Zeitangaben, Aktivierung/Deaktivierung. Nodivra 0.16 ergänzt Neustartregeln und Remanenz; die Mac-App 0.15.1 bleibt für bisherige Funktionen kompatibel. Seit Runtime 0.5 gibt es verknüpfbare Aktionsparameter und eine Wertauswahl für Zahlen, Ganzzahlen, Ein/Aus, Texte, Listen und Objekte. Diese Funktionen verwenden Protokoll 5 / Graphformat 6 und benötigen Nodivra 0.15; Protokolle 1–4 bleiben unterstützt. Engine und API besitzen automatisierte Tests mit isoliertem HA-Testserver. Die Abnahme auf einer echten HA-Installation und unter Dauerlast ist separat erforderlich. Automatische Einrichtung über https://github.com/MapleTreeDevelopment/nodivra-runtime; das lokale ZIP bleibt als manueller Weg erhalten.
 
@@ -22,7 +22,7 @@ Die Sicherung liegt zunächst auf dem HA-Datenträger. Unter Einstellungen → S
 ## Manueller Ersatzweg nach Freigabe des HA-OS-Updates
 
 1. Vollständige HA-Sicherung erstellen und herunterladen. Bei einer VM zusätzlich einen Snapshot des ausgeschalteten Systems anlegen, bevor das Betriebssystem verändert wird.
-2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.7.0.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
+2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.8.0.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
 3. Auf einer von Supervisor unterstützten HA-OS-Version den App-Store neu laden. Nodivra Runtime erscheint unter den lokalen Apps. Installieren. Der erste Build lädt offizielle Swift-/Python-Abhängigkeiten und benötigt Zeit und freien Speicher. Die Architektur wird vom Build gewählt.
 4. Runtime starten und **Weboberfläche öffnen** wählen. Unter **Zugang & Einstellungen** dort **Schlüssel generieren** und **Schlüssel speichern & verwenden** anklicken. 64 zufällige Zeichen werden erzeugt und in den HA-App-Optionen gespeichert; ein bisheriger gültiger Schlüssel wird erst nach Bestätigung ersetzt. Der Schlüssel lässt sich verborgen halten und kopieren. Ohne gültigen Schlüssel bleibt die externe Runtime-API gesperrt, die Einrichtung ist erreichbar.
 5. Auf dem Mac Runtime-Adresse `http://homeassistant.local:8668` und denselben Schlüssel eintragen. Lokales HTTP muss ausdrücklich erlaubt werden. Schlüssel und Programme laufen bei HTTP unverschlüsselt über das lokale Netz; Port 8668 nicht öffentlich freigeben. Die aktuelle Runtime terminiert selbst kein TLS.
@@ -105,3 +105,9 @@ Der Anlaufimpuls ist im ersten Zyklus eines neu initialisierten Programms Ein un
 [Regeln, Zeitverhalten und Wiederherstellung](docs/RESTART-AND-MEMORY.md). Einstellbar pro pausierter Automation im HA-Dashboard. Alle Timer pausieren während der Unterbrechung. Speicherzyklus etwa eine Sekunde; bei Stromausfall kann der letzte Zyklus fehlen. Programmübergreifende Merker sind noch nicht enthalten.
 
 [Isolierte Ausfalltests](docs/CRASH-RECOVERY-TESTS.md) prüfen harte Prozessabbrüche mit echter Swift-Engine und einer lokalen HA-Nachbildung, einschließlich Restzeiten, Merkerzuständen und unbestätigten Aktionen.
+
+## Live-Diagnose ab 0.8
+
+`GET /api/v1/live/{id}` ergänzt optionale `diagnostics` pro Block und `actions` mit dem letzten bestätigten Transportstatus samt Zeitstempel. Die Anzeige verändert weder Eingänge noch Aktionen. Unbekannte und fehlende Signale bleiben unbekannt; unbeschaltete neutrale Eingänge sind gesondert markiert. Timer zeigen die beim Start erfasste Vorgabe, Laufzeit und Resetursache. Bei älteren gespeicherten Laufzuständen können Gesamt- und vergangene Zeit fehlen; sie werden nicht geschätzt.
+
+Nodivra 0.17 verknüpft Protokollmeldungen mit ihren Blöcken. Historische Einträge bleiben als solche gekennzeichnet. `action_sent` meldet den Versand, `action` die HA-Bestätigung, `action_failed` einen Fehler oder unklaren Ausgang und `block_failed` einen Engine-Fehler. Beobachtung und Simulation werden niemals als Gerätebestätigung angezeigt. Ein bestätigter Dienstaufruf beweist keinen physischen Gerätezustand.

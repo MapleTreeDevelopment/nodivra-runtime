@@ -612,7 +612,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
     async def test_durable_guard_precedes_external_side_effect_and_survives_failure(self):
         r=await self.configure(await self.upload(package('light.turn_on')));await self.enable(r,'execute')
         called=[]
-        async def uncertain(config):
+        async def uncertain(config, on_sent=None):
             called.append(config)
             self.assertTrue(self.runtime.recovery_info(r['id'])['blocked'])
             raise TimeoutError('Response lost after possible device action')
