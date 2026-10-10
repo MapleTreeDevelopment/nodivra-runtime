@@ -1,3 +1,9 @@
+## 0.3.1
+
+- Logo wie in der Mac-App, mit korrekt ausgerichtetem Haus und Untertitel.
+
+- Dashboard beginnt oben: eigener Header mit Titel, optionalem Untertitel und Uhr. Kein vertikales Zentrieren kurzer Seiten.
+
 ## 0.3.0
 
 - Wetterkarten in drei Designs, mit optionalem Zustand, Luftfeuchtigkeit und Wind.

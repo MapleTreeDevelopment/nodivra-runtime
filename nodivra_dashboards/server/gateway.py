@@ -10,7 +10,7 @@ from browser_access import BrowserAccess
 from pathlib import Path
 from aiohttp import web, ClientSession, ClientTimeout, ClientError
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 MAX_RESPONSE = 8 * 1024 * 1024
 
 
@@ -92,10 +92,10 @@ class DashboardGateway:
         css = (folder / "renderer.css").read_text() + (folder / "navigation.css").read_text()
         js = (folder / "renderer.js").read_text()
         # Only the session CSRF nonce reaches the browser; no Runtime credential.
-        body = """<aside class="tool-sidebar"><div class="tool-brand"><span class="tool-brand-mark"><svg viewBox="0 0 24 24" preserveAspectRatio="none" aria-hidden="true"><path d="M12 1 23 9.5h-3V23h-6.5v-8h-3v8H4V9.5H1Z"/></svg></span><div><strong>Nodivra</strong><small>Dashboards</small></div></div>
+        body = """<aside class="tool-sidebar"><div class="tool-brand"><span class="tool-brand-mark"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M50 2 98 39H87V98H60V64H40V98H13V39H2Z"/></svg></span><div><strong>Nodivra</strong><small>Dashboards</small></div></div>
         <nav aria-label="Nodivra Navigation"><a class="tool-link" href="./" aria-current="page">Dashboards</a></nav>
         <nav id="dashboard-page-nav" aria-label="Dashboard-Seiten" hidden></nav>
-        <nav class="tool-settings"><span class="tool-link">Webdienst 0.3.0 · Gemeinsame Runtime</span></nav></aside><main id="dashboard"></main>"""
+        <nav class="tool-settings"><span class="tool-link">Webdienst 0.3.1 · Gemeinsame Runtime</span></nav></aside><main id="dashboard"></main>"""
         controls = ""
         if request.get('browser_user'):
             controls = '<button id="browser-logout" class="dash-link">Browser abmelden</button>'
@@ -147,7 +147,7 @@ class DashboardGateway:
         nonce = self.csrf
         html = """<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nodivra · Browser verbinden</title>
         <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#171d20;color:#eef1f4;font:14px -apple-system,BlinkMacSystemFont,sans-serif}main{max-width:360px;padding:32px}h1{font-size:23px;font-weight:400}p{line-height:1.6;color:#aab5bf}input,button{font:inherit;padding:12px;border-radius:9px;border:1px solid #414950;box-sizing:border-box;width:100%;margin-top:10px}input{background:#242b30;color:white}button{background:#1673ff;color:white;cursor:pointer}</style>
-        <main><h1><svg width="20" height="17" viewBox="0 0 24 24" preserveAspectRatio="none" aria-hidden="true" style="fill:#1673ff;margin-right:8px"><path d="M12 1 23 9.5h-3V23h-6.5v-8h-3v8H4V9.5H1Z"/></svg>Nodivra Dashboards</h1><p>Öffne Nodivra Dashboards in Home Assistant und wähle „Browser verbinden“. Gib hier den fünf Minuten gültigen Einmalcode ein.</p><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" aria-label="Einmalcode" placeholder="Einmalcode"><button id="login">Verbinden</button><p id="result" role="status"></p></main>
+        <main><h1><svg width="20" height="17" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="fill:#1673ff;margin-right:8px"><path d="M50 2 98 39H87V98H60V64H40V98H13V39H2Z"/></svg>Nodivra Dashboards</h1><p>Öffne Nodivra Dashboards in Home Assistant und wähle „Browser verbinden“. Gib hier den fünf Minuten gültigen Einmalcode ein.</p><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" aria-label="Einmalcode" placeholder="Einmalcode"><button id="login">Verbinden</button><p id="result" role="status"></p></main>
         <script nonce="NONCE">document.getElementById('login').onclick=async()=>{const b=document.getElementById('login');b.disabled=true;try{const r=await fetch('api/browser/login',{method:'POST',headers:{'Content-Type':'application/json','X-Nodivra-CSRF':CSRF},body:JSON.stringify({code:document.getElementById('code').value.trim()})});if(r.ok){location.reload();return;}document.getElementById('result').textContent='Verbindung nicht bestätigt. Code und Runtime prüfen.';}catch(e){document.getElementById('result').textContent='Webdienst nicht erreichbar.';}finally{b.disabled=false;}};</script></html>"""
         return web.Response(text=html.replace('NONCE',nonce).replace(':CSRF',':'+json.dumps(nonce)),content_type='text/html')
 

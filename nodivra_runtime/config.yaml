@@ -1,5 +1,5 @@
 name: Nodivra Runtime
-version: "0.12.0"
+version: "0.12.1"
 slug: nodivra_runtime
 description: Gemeinsame Runtime für Nodivra Automationen und eigene Dashboards.
 arch:

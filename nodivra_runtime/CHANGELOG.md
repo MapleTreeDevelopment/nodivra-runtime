@@ -1,3 +1,7 @@
+## 0.12.1
+
+- Gemeinsames Logo entspricht der Mac-App: flaches Haus neben Nodivra, Untertitel darunter.
+
 ## 0.12.0
 
 - Dashboard-Oberfläche ausschließlich in der separaten App „Nodivra Dashboards“. Gemeinsame Daten bleiben erhalten.

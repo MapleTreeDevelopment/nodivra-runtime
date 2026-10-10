@@ -11,7 +11,7 @@ def navigation(current, prefix="./"):
         active = ' aria-current="page"' if current == key else ''
         return f'<a class="tool-link" href="{prefix}{path}"{active}><svg viewBox="0 0 24 24" aria-hidden="true">{icons[key]}</svg><span>{title}</span></a>'
     return ('<aside class="tool-sidebar"><div class="tool-brand"><span class="tool-brand-mark" aria-hidden="true">'
-            '<svg viewBox="0 0 24 24" preserveAspectRatio="none" aria-hidden="true"><path d="M12 1 23 9.5h-3V23h-6.5v-8h-3v8H4V9.5H1Z"/></svg></span>'
+            '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M50 2 98 39H87V98H60V64H40V98H13V39H2Z"/></svg></span>'
             '<div><strong>Nodivra</strong><small>Dein Zuhause</small></div></div><nav aria-label="Nodivra Navigation">'
             + link("automations", "Automationen", "?view=automations")
             + '</nav><nav id="dashboard-page-nav" aria-label="Dashboard-Seiten" hidden></nav><nav class="tool-settings" aria-label="Runtime-Einstellungen">'

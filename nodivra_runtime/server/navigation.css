@@ -13,3 +13,9 @@
 .tool-brand strong{font-size:19px;font-weight:400;letter-spacing:-.6px}.tool-brand-mark svg{width:20px;height:17px;fill:currentColor;stroke:none}.tool-sidebar .tool-link{font-size:13px;font-weight:400}
 
 .browser-tools{grid-column:2;padding:8px 30px 24px;font-size:12px;color:var(--muted)}.browser-tools button{font-size:12px}.browser-tools p{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}@media(max-width:760px){.browser-tools{padding:16px}}
+
+/* Same silhouette, size and spacing as NodivraBrand in the Mac app. */
+.tool-brand{display:grid;grid-template-columns:20px minmax(0,1fr);column-gap:9px;row-gap:3px;align-items:center}
+.tool-brand>div{display:contents}.tool-brand-mark{grid-column:1;grid-row:1;display:flex;align-items:center;color:#146eff}
+.tool-brand strong{grid-column:2;grid-row:1;line-height:1.45}
+.tool-brand small{grid-column:2;grid-row:2;margin:0}
