@@ -36,8 +36,11 @@ def validate(document, complete=False):
     require(document.get("schemaVersion") == 1, "Diese Dashboard-Version wird noch nicht unterstützt.")
     identifier(document.get("id"))
     require(text(document.get("title")) and document["title"].strip(), "Gib dem Dashboard einen Namen.")
+    require("subtitle" not in document or text(document["subtitle"], 240))
+    require("showClock" not in document or type(document["showClock"]) is bool)
     require(len(canonical(document).encode()) <= MAX_DOCUMENT, "Das Dashboard ist zu groß (maximal 4 MB).")
     theme = document.get("theme", {})
+    require(isinstance(theme, dict) and theme.get("palette") in (None, "slate", "cloud", "sand", "midnight"))
     require(isinstance(theme, dict) and theme.get("appearance") in ("system", "light", "dark") and theme.get("font") in ("system", "rounded", "serif"))
     require(isinstance(theme.get("accent"), str) and re.fullmatch(r"#[a-fA-F0-9]{6}", theme["accent"]) is not None)
     require(number(theme.get("radius"), 0, 32) and number(theme.get("spacing"), 4, 24) and number(theme.get("fontSize"), 12, 22))
@@ -61,9 +64,10 @@ def validate(document, complete=False):
         require(isinstance(page.get("components"), list)); count += len(page["components"]); require(count <= 200, "Maximal 200 Komponenten pro Dashboard.")
         for c in page["components"]:
             require(isinstance(c, dict)); identity = identifier(c.get("id")); require(identity not in ids); ids.add(identity)
-            require(c.get("kind") in ("light", "switch", "value", "text", "image", "camera", "graph"))
+            require(c.get("kind") in ("light", "climate", "scene", "switch", "value", "text", "image", "camera", "graph"))
             require(text(c.get("title")) and text(c.get("text"), 10000) and text(c.get("unit"), 32) and text(c.get("assetID"), 36))
             require(c.get("effect", "none") in ("none", "glow", "pulse") and type(c.get("animated", True)) is bool and c.get("cameraMode", "stream") in ("stream", "snapshots"))
+            require("showTitle" not in c or type(c["showTitle"]) is bool)
             require(isinstance(c.get("layouts"), dict))
             for size, cols in (("desktop", 12), ("tablet", 8), ("mobile", 4)):
                 f = c["layouts"].get(size, {})
@@ -73,17 +77,26 @@ def validate(document, complete=False):
             require(isinstance(b, dict) and b.get("source") in ("entity", "runtime"))
             require(all(text(b.get(k), 180) for k in ("entityID", "attribute", "programID", "blockID", "metric")))
             require(not b["entityID"] or ENTITY.fullmatch(b["entityID"]) is not None)
+            area = b.get("areaID")
+            if area is not None:
+                require(c["kind"] == "light" and b["source"] == "entity" and text(area,180) and bool(area) and not b["entityID"] and not b["attribute"], "Ungültiges Bereichsziel.")
+            linked = c.get("brightnessBinding")
+            if linked is not None:
+                require(c["kind"] == "light" and isinstance(linked, dict) and linked.get("source") == "runtime" and linked.get("metric") == "number")
+                require(all(text(linked.get(k), 180) for k in ("entityID", "attribute", "programID", "blockID", "metric")))
+                if complete: identifier(linked["programID"]); identifier(linked["blockID"])
             if complete:
                 if c["kind"] == "image": require(c["assetID"] in asset_ids, c["title"] + ": Bild fehlt.")
                 if c["kind"] not in ("image", "text"):
-                    if b["source"] == "entity": require(bool(b["entityID"]), c["title"] + ": Entität fehlt.")
+                    if b["source"] == "entity": require(bool(b["entityID"]) or bool(area), c["title"] + ": Entität fehlt.")
                     else:
                         identifier(b["programID"]); identifier(b["blockID"])
                         require(b["metric"] in ("signal", "number", "remaining"))
+                if c["kind"] in ("scene", "climate"): require(b["source"] == "entity" and b["entityID"].startswith(c["kind"]+".") and not b["attribute"], "Ungültiges Ziel.")
                 if c["kind"] == "camera": require(b["source"] == "entity" and b["entityID"].startswith("camera.") and not b["attribute"], c["title"] + ": Kamera-Entität fehlt.")
                 if c["kind"] in ("light", "switch"):
                     domains = ("light",) if c["kind"] == "light" else ("light", "switch", "input_boolean")
-                    require(b["source"] == "entity" and b["entityID"].split(".")[0] in domains and not b["attribute"], c["title"] + ": Ungültiges Schaltziel.")
+                    require(b["source"] == "entity" and (b["entityID"].split(".")[0] in domains or bool(area)) and not b["attribute"], c["title"] + ": Ungültiges Schaltziel.")
     return document
 
 class DashboardStore:
@@ -222,6 +235,7 @@ class DashboardService:
         return web.json_response({"revisions": [dict(revision=r["revision"],title=r["document"]["title"],created=r["created"]) for r in entries]})
     async def preview(self, request):
         document = await self.call(validate, await request.json())
+        await self.refresh_areas(document)
         values = self.values(document)
         cameras = [c for p in document["pages"] for c in p["components"] if c["kind"] == "camera"][:4]
         # Preview sends image bytes through the authenticated Mac API. No HA credential reaches HTML.
@@ -249,19 +263,43 @@ class DashboardService:
     async def get_published(self, request): return web.json_response(await self.call(self.store.published, request.match_info["id"]))
     async def live_values(self, request):
         published = await self.call(self.store.published, request.match_info["id"])
+        await self.refresh_areas(published["document"])
         return web.json_response({"revision": published["revision"], "values": self.values(published["document"]), "connected": self.runtime.ha.connected})
+    async def refresh_areas(self, document):
+        if not any(c["binding"].get("areaID") for p in document["pages"] for c in p["components"]): return
+        if not hasattr(self, "area_lock"):
+            self.area_lock = asyncio.Lock(); self.area_members = {}; self.area_at = 0
+        async with self.area_lock:
+            if not self.runtime.ha.connected: self.area_members = {}; self.area_at = 0; return
+            if time.monotonic()-self.area_at < 10: return
+            self.area_at = time.monotonic()
+            try: self.area_members = await self.runtime.ha.area_lights()
+            except Exception: self.area_members = {}
+
     def values(self, document):
         result = {}
         for page in document["pages"]:
             for c in page["components"]:
                 b = c["binding"]; value = None; extra = {}; reason = "Wert nicht verfügbar"
                 if not self.runtime.ha.connected: reason = "Home Assistant nicht verbunden"
+                elif b.get("areaID"):
+                    members = getattr(self, "area_members", {}).get(b["areaID"], [])
+                    states = [self.runtime.ha.states.get(entity) for entity in members]
+                    if members and all(state in ("on", "off") for state in states): value = "on" if "on" in states else "off"
+                    else: reason = "Bereich leer oder Leuchten nicht verfügbar"
                 elif b["source"] == "entity" and b["attribute"] in ("access_token", "entity_picture", "token", "password"):
                     reason = "Geschütztes Attribut"
                 elif b["source"] == "entity":
                     state = self.runtime.ha.states.get(b["entityID"])
                     if state not in (None, "unknown", "unavailable"):
                         value = self.runtime.ha.states.get(b["entityID"] + ("#"+b["attribute"] if b["attribute"] else ""))
+                        if c["kind"] == "climate":
+                            for source, target in (("current_temperature", "temperature"), ("temperature", "targetTemperature"), ("min_temp", "minTemperature"), ("max_temp", "maxTemperature"), ("target_temp_step", "temperatureStep")):
+                                candidate = self.runtime.ha.states.get(b["entityID"]+"#"+source)
+                                try:
+                                    numeric = float(candidate) if type(candidate) in (int, float, str) else float("nan")
+                                    if math.isfinite(numeric): extra[target] = numeric
+                                except (ValueError, OverflowError): pass
                         brightness = self.runtime.ha.states.get(b["entityID"]+"#brightness")
                         if brightness is not None:
                             try: extra["brightness"] = max(1, min(100, round(float(brightness)/255*100)))
@@ -275,10 +313,20 @@ class DashboardService:
                         field = {"signal":"signals", "number":"analogSignals", "remaining":"remaining"}.get(b["metric"], "signals")
                         value = next((v for k, v in snapshot.get(field, {}).items() if k.lower() == b["blockID"].lower()), None)
                     else: reason = "Automation nicht aktiv oder Wert veraltet"
+                linked = c.get("brightnessBinding")
+                if linked:
+                    extra["linkedBrightness"] = self.linked_brightness(linked)
                 if isinstance(value, float) and not math.isfinite(value): value = None
                 known = value is not None and value not in ("unknown", "unavailable")
                 result[c["id"]] = dict(known=known, value=value if known else None, observedAt=time.time(), reason="" if known else reason, **extra)
         return result
+    def linked_brightness(self, binding):
+        program, block = binding["programID"].lower(), binding["blockID"].lower()
+        snapshot = next((v for k, v in self.runtime.snapshots.items() if k.lower() == program), None)
+        if not self.runtime.ha.connected or not any(k.lower() == program for k in self.runtime.running) or not snapshot or time.time()-snapshot.get("observedAt", 0) > 3: return None
+        value = next((v for k, v in snapshot.get("analogSignals", {}).items() if k.lower() == block), None)
+        return round(value) if type(value) in (int, float) and math.isfinite(value) and 1 <= value <= 100 else None
+
     def camera_url(self, entity, stream=False):
         require(isinstance(entity, str) and ENTITY.fullmatch(entity) and entity.startswith("camera."))
         base = self.runtime.ha.base.rstrip("/")
@@ -335,8 +383,18 @@ class DashboardService:
             published = await self.call(self.store.published, request.match_info["id"])
             require(data.get("revision") == published["revision"], "Dashboard wurde geändert. Bitte neu laden.", 409)
             c = next((c for p in published["document"]["pages"] for c in p["components"] if c["id"] == data.get("componentID")), None)
-            require(c is not None and c["kind"] in ("light", "switch"), "Diese Komponente kann nicht schalten.", 403)
-            require(type(data.get("on")) is bool)
+            require(c is not None and c["kind"] in ("light", "switch", "scene", "climate"), "Diese Komponente kann nicht schalten.", 403)
+            await self.refresh_areas(published["document"])
+            current = self.values(published["document"])[c["id"]]
+            if c["kind"] == "climate":
+                temperature = data.get("temperature")
+                low, high = current.get("minTemperature"), current.get("maxTemperature")
+                require(type(temperature) in (int, float) and math.isfinite(temperature) and low is not None and high is not None and low <= temperature <= high, "Temperatur liegt außerhalb der Gerätegrenzen.")
+                require("on" not in data and "brightness" not in data)
+            else:
+                require(type(data.get("on")) is bool)
+                require(c["kind"] != "scene" or data["on"], "Eine Szene kann nur aktiviert werden.")
+                require("temperature" not in data)
             require("brightness" not in data or (c["kind"] == "light" and number(data["brightness"], 1, 100) and data["on"]))
             require(self.values(published["document"])[c["id"]]["known"], "Kein aktueller Gerätezustand. Bitte Verbindung prüfen.", 409)
             digest = hashlib.sha256(canonical([published["id"], data]).encode()).hexdigest()
@@ -347,8 +405,19 @@ class DashboardService:
             previous = await self.call(self.store.action_claim, request_id, digest)
             if previous: return web.json_response(previous)
             self.recent.append(now)
-            entity = c["binding"]["entityID"]; domain = entity.split(".")[0]
-            configuration = {"action": domain + (".turn_on" if data["on"] else ".turn_off"), "target": {"entity_id":entity}, "data": {"brightness_pct": data["brightness"]} if "brightness" in data else {}}
+            if c.get("brightnessBinding") and data.get("on"):
+                linked = self.linked_brightness(c["brightnessBinding"])
+                if linked is None:
+                    result = {"status":"unconfirmed", "message":"Verknüpfter Helligkeitswert fehlt oder ist veraltet. Kein Aufruf gesendet."}
+                    await self.call(self.store.action_finish, request_id, result)
+                    return web.json_response(result)
+                data = dict(data, brightness=linked)
+            entity = c["binding"]["entityID"]; domain = "light" if c["binding"].get("areaID") else entity.split(".")[0]
+            target = {"area_id": c["binding"]["areaID"]} if c["binding"].get("areaID") else {"entity_id": entity}
+            if c["kind"] == "climate":
+                configuration = {"action": "climate.set_temperature", "target": target, "data": {"temperature": data["temperature"]}}
+            else:
+                configuration = {"action": domain + (".turn_on" if data["on"] else ".turn_off"), "target": target, "data": {"brightness_pct": data["brightness"]} if "brightness" in data else {}}
             try:
                 await self.runtime.ha.action(configuration)
                 result = {"status":"confirmed", "message":"Von Home Assistant bestätigt · Gerätezustand separat angezeigt."}

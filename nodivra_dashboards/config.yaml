@@ -1,5 +1,5 @@
 name: Nodivra Dashboards
-version: "0.1.0"
+version: "0.2.0"
 slug: nodivra_dashboards
 description: Eigener Dashboard-Webdienst mit zentralen Daten aus der Nodivra Runtime.
 arch:
@@ -15,11 +15,21 @@ ingress_stream: true
 panel_admin: true
 panel_title: Nodivra Dashboards
 panel_icon: mdi:view-dashboard-outline
+ports:
+  8669/tcp: null
+ports_description:
+  8669/tcp: Eigene Dashboard-Seite (optional, Browser-Kopplung erforderlich)
+map:
+  - ssl:ro
 options:
   runtime_url: http://c74fad0a-nodivra-runtime:8668
   access_key: ""
   server_id: ""
+  standalone_mode: disabled
+  standalone_host: homeassistant.local
 schema:
   runtime_url: match(^http://[a-z0-9]+-nodivra-runtime:8668$)
   access_key: password
   server_id: str
+  standalone_mode: list(disabled|http|https)
+  standalone_host: match(^[a-z0-9][a-z0-9.-]{0,252}$)

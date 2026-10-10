@@ -1,3 +1,14 @@
+## 0.2.0
+
+- Vier auswählbare Dashboard-Designs: Schiefer, Wolke, Sand und Nacht, jeweils mit Hell-/Dunkel-Darstellung.
+- Optionale eigenständige Browser-Seite auf Port 8669, standardmäßig deaktiviert.
+- Einmalcode-Kopplung über HA, 30 Tage gültige widerrufbare Browser-Anmeldung.
+- HTTPS mit /ssl/fullchain.pem und /ssl/privkey.pem; lokales HTTP muss ausdrücklich ausgewählt werden.
+
+- Überarbeitete Dashboard-Darstellung passend zum neuen Mac-Designer.
+- Szenen, Raumklima, Hintergrundbilder und optionale Titel.
+- Benötigt für die neuen Komponenten Runtime 0.11.0.
+
 # 0.1.0
 
 - Eigene Home-Assistant-App mit eigenem Webdienst und Sidebar-Eintrag.

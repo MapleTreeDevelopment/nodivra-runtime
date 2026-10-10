@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import uuid
 from aiohttp import web, ClientSession, WSMsgType
 
-spec = importlib.util.spec_from_file_location('runtime_server', Path(__file__).parents[1] / 'nodivra_runtime/server/server.py')
+spec = importlib.util.spec_from_file_location('runtime_server', Path(__file__).parents[1] / 'server/server.py')
 server = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(server)
 KEY = 'test-fixture-runtime-access-key-0123456789'

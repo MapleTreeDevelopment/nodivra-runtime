@@ -16,6 +16,7 @@ from server import Runtime
 from dashboard_access import display_key
 GATEWAY = ROOT / 'Dashboards/server/gateway.py'
 if not GATEWAY.exists(): GATEWAY = Path(__file__).resolve().parents[1] / 'nodivra_dashboards/server/gateway.py'
+sys.path.insert(0, str(GATEWAY.parent))
 spec = importlib.util.spec_from_file_location('dashboard_gateway', GATEWAY)
 gateway = importlib.util.module_from_spec(spec); spec.loader.exec_module(gateway)
 KEY = 'fixture-runtime-key-' + 'a' * 40

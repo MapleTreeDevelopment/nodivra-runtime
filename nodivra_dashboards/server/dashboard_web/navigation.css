@@ -9,3 +9,7 @@
 @media(max-width:400px){.tool-sidebar .tool-link{gap:7px;font-size:12px;padding:9px 6px}.tool-brand small{display:none}}
 
 .tool-sidebar [hidden]{display:none!important}
+
+.tool-brand strong{font-size:19px;font-weight:400;letter-spacing:-.6px}.tool-brand-mark svg{width:20px;height:17px;fill:currentColor;stroke:none}.tool-sidebar .tool-link{font-size:13px;font-weight:400}
+
+.browser-tools{grid-column:2;padding:8px 30px 24px;font-size:12px;color:var(--muted)}.browser-tools button{font-size:12px}.browser-tools p{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}@media(max-width:760px){.browser-tools{padding:16px}}

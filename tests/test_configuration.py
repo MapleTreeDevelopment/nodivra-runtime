@@ -8,7 +8,7 @@ import hashlib
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-spec = importlib.util.spec_from_file_location('configuration', Path(__file__).parents[1] / 'nodivra_runtime/server/configuration.py')
+spec = importlib.util.spec_from_file_location('configuration', Path(__file__).parents[1] / 'server/configuration.py')
 module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 KEY = 'a' * 64
 

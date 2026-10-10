@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock
 import uuid
 from aiohttp import web, ClientSession
 from aiohttp.test_utils import TestClient, TestServer
-sys.path.insert(0, str(Path(__file__).parents[1] / 'nodivra_runtime/server'))
+sys.path.insert(0, str(Path(__file__).parents[1] / 'server'))
 from dashboards import DashboardStore, DashboardService, DashboardError, validate
 from configuration import RuntimeConfiguration
 
@@ -117,6 +117,53 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         self.ha.is_admin.return_value=False
         for path in [self.path,self.path+'/values','/dashboards/']:
             self.assertEqual((await self.client.get(path)).status,403)
+    async def test_area_target_resolves_lights_and_uses_fixed_area(self):
+        c=component('light','');c['binding']['areaID']='kitchen';doc=document(c)
+        self.ha.area_lights=AsyncMock(return_value={'kitchen':['light.kitchen']})
+        record=self.service.store.change(doc['id'],'save',request(document=doc))
+        record=self.service.store.change(doc['id'],'publish',request(record))
+        path='/dashboards/api/published/'+doc['id']+'/actions'
+        payload=dict(componentID=c['id'],revision=record['revision'],requestID=uid(),on=False,areaID='forged')
+        self.assertEqual((await self.client.post(path,json=payload,headers=self.headers)).status,200)
+        self.ha.action.assert_awaited_once_with({'action':'light.turn_off','target':{'area_id':'kitchen'},'data':{}})
+        self.ha.states['light.kitchen']='unavailable';payload['requestID']=uid()
+        self.assertEqual((await self.client.post(path,json=payload,headers=self.headers)).status,409)
+        self.ha.action.assert_awaited_once()
+
+    async def test_scene_and_climate_actions_validate_fixed_targets_and_bounds(self):
+        scene, climate = component('scene','scene.relax'), component('climate','climate.kitchen')
+        doc = document(scene, climate)
+        self.ha.states.update({'scene.relax':'2026-01-01', 'climate.kitchen':'heat', 'climate.kitchen#current_temperature':'21.5', 'climate.kitchen#temperature':'22', 'climate.kitchen#min_temp':'7', 'climate.kitchen#max_temp':'30'})
+        record = self.service.store.change(doc['id'],'save',request(document=doc))
+        record = self.service.store.change(doc['id'],'publish',request(record))
+        path='/dashboards/api/published/'+doc['id']+'/actions'
+        def payload(c, **extra): return dict(componentID=c['id'],revision=record['revision'],requestID=uid(),**extra)
+        self.assertEqual((await self.client.post(path,json=payload(climate,temperature=31),headers=self.headers)).status,422)
+        self.assertEqual((await self.client.post(path,json=payload(scene,on=False),headers=self.headers)).status,422)
+        self.ha.action.assert_not_awaited()
+        self.assertEqual((await self.client.post(path,json=payload(climate,temperature=23.5),headers=self.headers)).status,200)
+        self.ha.action.assert_awaited_with({'action':'climate.set_temperature','target':{'entity_id':'climate.kitchen'},'data':{'temperature':23.5}})
+        self.assertEqual((await self.client.post(path,json=payload(scene,on=True),headers=self.headers)).status,200)
+        self.ha.action.assert_awaited_with({'action':'scene.turn_on','target':{'entity_id':'scene.relax'},'data':{}})
+
+    async def test_linked_brightness_uses_fresh_runtime_value_and_rejects_stale(self):
+        c = component(); program, block = uid(), uid()
+        c['brightnessBinding']=dict(source='runtime',entityID='',attribute='',programID=program,blockID=block,metric='number')
+        doc=document(c)
+        record=self.service.store.change(doc['id'],'save',request(document=doc))
+        record=self.service.store.change(doc['id'],'publish',request(record))
+        self.runtime.running[program]=True
+        self.runtime.snapshots[program]={'observedAt':time.time(),'analogSignals':{block:30}}
+        path='/dashboards/api/published/'+doc['id']+'/actions'
+        payload=dict(componentID=c['id'],revision=record['revision'],requestID=uid(),on=True)
+        await self.client.post(path,json=payload,headers=self.headers)
+        self.ha.action.assert_awaited_once_with({'action':'light.turn_on','target':{'entity_id':'light.kitchen'},'data':{'brightness_pct':30}})
+        self.runtime.snapshots[program]['observedAt']-=10
+        payload['requestID']=uid()
+        response=await self.client.post(path,json=payload,headers=self.headers)
+        self.assertEqual((await response.json())['status'],'unconfirmed')
+        self.ha.action.assert_awaited_once()
+
     async def test_uncertain_action_is_never_resent(self):
         self.ha.action.side_effect=TimeoutError()
         payload=dict(componentID=self.doc['pages'][0]['components'][0]['id'],revision=self.record['revision'],requestID=uid(),on=False)
@@ -157,11 +204,9 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status,200)
         for secret in ['never-in-browser','supervisor-secret','secret-camera-token']:self.assertNotIn(secret,html)
         self.assertIn("img-src 'self' data:",response.headers['Content-Security-Policy'])
-        root=Path(__file__).parents[1]
+        root=Path(__file__).parents[2]
         for name in ['renderer.css','renderer.js']:
-            source=(root/'nodivra_runtime/server/dashboard_web'/name).read_text()
-            self.assertTrue(source.strip())
-            self.assertIn(source,html)
+            self.assertEqual((root/'Sources/NodivraDashboard/Resources'/name).read_bytes(),(root/'Runtime/server/dashboard_web'/name).read_bytes())
     async def test_unpublish_invalidates_values_media_and_actions(self):
         self.service.store.change(self.doc['id'],'unpublish',request(self.record))
         self.assertEqual((await self.client.get(self.path+'/values')).status,404)

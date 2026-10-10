@@ -1,3 +1,11 @@
+## 0.11.0
+
+- Vier auswählbare Dashboard-Designs: Schiefer, Wolke, Sand und Nacht, jeweils mit Hell-/Dunkel-Darstellung.
+- Dashboard-Szenen und Raumklima mit festen Zielen und Temperaturgrenzen.
+- Frische Runtime-Zahlenwerte als Helligkeit beim Einschalten verwenden.
+- Gemeinsame Darstellung mit Hintergrundbildern, leichter Typografie, Datum und Uhrzeit.
+- Alte Dashboard-Entwürfe bleiben kompatibel.
+
 # 0.10.0
 
 - Unterstützt die separate HA-App „Nodivra Dashboards“ mit eigenem Webdienst.

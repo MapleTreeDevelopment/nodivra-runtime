@@ -32,5 +32,5 @@ jobs:
         run: >-
           docker run --rm --entrypoint python
           -v "$PWD:/tests:ro" -w /tests nodivra-dashboards
-          -m unittest discover -s tests -p test_dashboard_gateway.py -v
+          -m unittest discover -s tests -p test_dashboard_*.py -v
 

@@ -18,7 +18,7 @@ from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dashboards import DashboardService, DashboardError
 
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 from dashboard_access import display_key, display_request
 
 def canonical(value):
@@ -209,6 +209,27 @@ class HomeAssistant:
             return False
         finally:
             self.waiting.pop(identity, None)
+
+    async def area_lights(self):
+        async def read(kind):
+            if not self.connected or not self.ws: raise RuntimeError("Home Assistant nicht verbunden")
+            self.serial += 1; identity = self.serial
+            future = asyncio.get_running_loop().create_future(); self.waiting[identity] = future
+            try:
+                await self.ws.send_json({"id": identity, "type": kind})
+                response = await asyncio.wait_for(future, 5)
+                if response.get("success") is not True or not isinstance(response.get("result"), list): raise RuntimeError("Bereiche nicht verfügbar")
+                return response["result"]
+            finally: self.waiting.pop(identity, None)
+        entities, devices = await asyncio.gather(read("config/entity_registry/list"), read("config/device_registry/list"))
+        device_areas = {d["id"]: d.get("area_id") for d in devices}
+        result = {}
+        for entity in entities:
+            identity = entity.get("entity_id", "")
+            if identity.startswith("light.") and not entity.get("disabled_by"):
+                area = entity.get("area_id") or device_areas.get(entity.get("device_id"))
+                if area: result.setdefault(area, []).append(identity)
+        return result
 
     def supports(self, action):
         domain, service = action.split(".", 1)
@@ -570,7 +591,7 @@ class Runtime:
         return web.json_response({"service": "nodivra-runtime", "version": VERSION}, status=200 if ready else 503)
 
     async def status(self, request):
-        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "dashboards.documents.v1", "dashboards.display.v1"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
+        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "dashboards.documents.v1", "dashboards.display.v1", "dashboards.designer.v2"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
 
     async def list_programs(self, request):
         return web.json_response({"automations": self.records()})
