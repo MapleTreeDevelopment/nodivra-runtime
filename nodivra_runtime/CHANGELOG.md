@@ -1,3 +1,7 @@
+# 0.9.2
+
+- Korrigiert den direkten Dashboard-Einstieg über Home Assistant Ingress: kein doppelter Schrägstrich im Einstiegspfad.
+
 # 0.9.1
 
 - Home-Assistant-Seitenleiste: „Nodivra Dashboards“ öffnet die Dashboard-Auswahl direkt.
