@@ -1,5 +1,6 @@
 """Ingress access, key setup and ambiguous-write recovery using local fixtures only."""
 import importlib.util
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -8,7 +9,10 @@ import hashlib
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-spec = importlib.util.spec_from_file_location('configuration', Path(__file__).parents[1] / 'server/configuration.py')
+SERVER = Path(__file__).resolve().parents[1] / 'server'
+if not SERVER.exists(): SERVER = Path(__file__).resolve().parents[1] / 'nodivra_runtime/server'
+sys.path.insert(0, str(SERVER))
+spec = importlib.util.spec_from_file_location('configuration', SERVER / 'configuration.py')
 module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 KEY = 'a' * 64
 

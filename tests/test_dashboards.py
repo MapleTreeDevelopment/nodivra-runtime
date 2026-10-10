@@ -13,7 +13,9 @@ from unittest.mock import AsyncMock
 import uuid
 from aiohttp import web, ClientSession
 from aiohttp.test_utils import TestClient, TestServer
-sys.path.insert(0, str(Path(__file__).parents[1] / 'server'))
+SERVER = Path(__file__).resolve().parents[1] / 'server'
+if not SERVER.exists(): SERVER = Path(__file__).resolve().parents[1] / 'nodivra_runtime/server'
+sys.path.insert(0, str(SERVER))
 from dashboards import DashboardStore, DashboardService, DashboardError, validate
 from configuration import RuntimeConfiguration
 
@@ -205,8 +207,10 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         for secret in ['never-in-browser','supervisor-secret','secret-camera-token']:self.assertNotIn(secret,html)
         self.assertIn("img-src 'self' data:",response.headers['Content-Security-Policy'])
         root=Path(__file__).parents[2]
+        shared = root/'Sources/NodivraDashboard/Resources'
+        if not shared.exists(): shared = Path(__file__).resolve().parents[1]/'nodivra_dashboards/server/dashboard_web'
         for name in ['renderer.css','renderer.js']:
-            self.assertEqual((root/'Sources/NodivraDashboard/Resources'/name).read_bytes(),(root/'Runtime/server/dashboard_web'/name).read_bytes())
+            self.assertEqual((shared/name).read_bytes(),(SERVER/'dashboard_web'/name).read_bytes())
     async def test_unpublish_invalidates_values_media_and_actions(self):
         self.service.store.change(self.doc['id'],'unpublish',request(self.record))
         self.assertEqual((await self.client.get(self.path+'/values')).status,404)
