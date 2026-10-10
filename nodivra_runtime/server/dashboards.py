@@ -13,6 +13,7 @@ import threading
 import time
 import uuid
 from aiohttp import web, ClientTimeout, ClientError
+from navigation import navigation, navigation_style
 
 MAX_DOCUMENT = 4 * 1024 * 1024
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -227,7 +228,7 @@ class DashboardService:
     async def page(self, request):
         folder = Path(__file__).with_name("dashboard_web")
         css = (folder/"renderer.css").read_text(); js = (folder/"renderer.js").read_text()
-        html = "<!doctype html><html lang='de'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Nodivra Dashboards</title><style nonce='"+self.csrf+"'>"+css+"</style></head><body><main id='dashboard'></main><script nonce='"+self.csrf+"'>"+js+"\nNodivra.boot("+canonical({"mode":"viewer","csrf":self.csrf})+");</script></body></html>"
+        html = "<!doctype html><html lang='de'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Nodivra Dashboards</title><style nonce='"+self.csrf+"'>"+css+navigation_style()+"</style></head><body class='tool-layout'>"+navigation("dashboards", "../")+"<main id='dashboard'></main><script nonce='"+self.csrf+"'>"+js+"\nNodivra.boot("+canonical({"mode":"viewer","csrf":self.csrf})+");</script></body></html>"
         return web.Response(text=html, content_type="text/html")
     async def list_published(self, request):
         records = await self.call(self.store.read); items = []

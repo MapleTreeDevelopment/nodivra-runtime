@@ -18,7 +18,7 @@ from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dashboards import DashboardService, DashboardError
 
-VERSION = "0.9.0"
+VERSION = "0.9.1"
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)

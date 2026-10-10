@@ -10,6 +10,7 @@ import uuid
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dashboards import DashboardError
+from navigation import navigation, navigation_style
 from aiohttp import web, ClientSession, ClientTimeout
 
 class RuntimeConfiguration:
@@ -70,7 +71,14 @@ class RuntimeConfiguration:
         return app
 
     async def page(self, request):
-        return web.Response(text=Path(__file__).with_name("configuration.html").read_text().replace("__NONCE__", self.csrf), content_type="text/html")
+        view = "runtime" if request.query.get("view") == "runtime" else "automations"
+        title, subtitle = (("Runtime", "Eine Verbindung für alle deine Werkzeuge.") if view == "runtime"
+                           else ("Automationen", "Deine Abläufe. Direkt im Blick."))
+        html = Path(__file__).with_name("configuration.html").read_text()
+        for key, value in {"__NONCE__": self.csrf, "__NAV_STYLE__": navigation_style(), "__NAVIGATION__": navigation(view),
+                           "__VIEW__": view, "__TITLE__": title, "__SUBTITLE__": subtitle}.items():
+            html = html.replace(key, value)
+        return web.Response(text=html, content_type="text/html")
 
     async def status(self, request):
         info = await self.call("GET", "/addons/self/info")

@@ -6,6 +6,7 @@
   const nodes=new Map(), inflight=new Set(), histories=new Map(), pausedCameras=new Set();
   let cameraTimer=null; const reduceMotion=matchMedia("(prefers-reduced-motion: reduce)");
   const columns={desktop:12,tablet:8,mobile:4};
+  const defaultTitles={text:'Text',camera:'Kamera',image:'Bild',graph:'Livegraph',value:'Wertanzeige',light:'Licht',switch:'Schalter'};
   const icons={light:'M9 18h6M10 21h4M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 2H9s0-1-1-2',switch:'M12 3v9M7 5a8 8 0 1 0 10 0',camera:'M3 5h12v14H3zM15 10l6-4v12l-6-4',graph:'M3 3v18h18M5 16l4-5 4 2 7-9',value:'M4 9h16M3 15h16M10 3 8 21M17 3l-2 18',text:'M4 5h16M12 5v15M8 20h8',image:'M3 3h18v18H3zM3 17l6-6 4 4 3-3 5 5'};
   function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;}
   function bridge(message){window.webkit?.messageHandlers?.dashboard?.postMessage(message);}
@@ -16,16 +17,18 @@
   function theme(){const t=documentModel.theme;root.style.setProperty('--accent',t.accent);root.style.setProperty('--radius',t.radius+'px');root.style.setProperty('--gap',t.spacing+'px');document.documentElement.style.setProperty('--size',t.fontSize+'px');document.documentElement.style.colorScheme=t.appearance==='system'?'light dark':t.appearance;root.style.fontFamily=t.font==='rounded'?'ui-rounded,-apple-system,sans-serif':t.font==='serif'?'ui-serif,Georgia,serif':'-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';}
   function render(){
     if(!documentModel)return;stopCameras();theme();root.replaceChildren();nodes.clear();root.classList.toggle('dash-edit',options.mode==='editor'&&!payload.preview);
-    if(options.mode==='viewer'){const back=el('a','dash-back','‹ Alle Dashboards');back.href='./';root.append(back);}
     const head=el('header','dash-heading');head.append(el('h1','',documentModel.title),el('small','',options.mode==='editor'?'Vorschau · keine Geräteaktionen':'Nodivra'));root.append(head);
-    const nav=el('nav','dash-pages');nav.setAttribute('aria-label','Dashboard-Seiten');
+    const sideNav=options.mode==='viewer'?document.getElementById('dashboard-page-nav'):null;
+    const nav=sideNav||el('nav','dash-pages');nav.replaceChildren();nav.setAttribute('aria-label','Dashboard-Seiten');
+    if(sideNav){sideNav.hidden=false;sideNav.append(el('span','nav-section-title','Seiten'));}
     const page=documentModel.pages.find(p=>p.id===pageID)||documentModel.pages[0];pageID=page.id;
-    for(const p of documentModel.pages){const b=el('button','',p.title);b.setAttribute('aria-pressed',String(p.id===pageID));b.onclick=()=>{pageID=p.id;bridge({type:'page',id:p.id});render();};nav.append(b);}root.append(nav);
+    for(const p of documentModel.pages){const b=el('button','',p.title);b.setAttribute('aria-pressed',String(p.id===pageID));if(p.id===pageID)b.setAttribute('aria-current','page');b.onclick=()=>{pageID=p.id;bridge({type:'page',id:p.id});render();};nav.append(b);}if(!sideNav)root.append(nav);
     const grid=el('div','dash-grid');grid.style.setProperty('--columns',columns[viewport()]);root.append(grid);
-    if(!page.components.length)grid.append(el('div','dash-empty','Füge links deine erste Komponente hinzu.'));
+    if(!page.components.length)grid.append(el('div','dash-empty',options.mode==='editor'?'Füge links deine erste Komponente hinzu.':'Diese Seite enthält noch keine Inhalte.'));
     for(const c of page.components){
       const card=el('section','dash-widget');card.dataset.kind=c.kind;card.dataset.effect=c.effect||'none';card.dataset.id=c.id;card.setAttribute('aria-label',c.title);setFrame(card,frame(c));card.classList.toggle('selected',selected===c.id&&!payload.preview&&options.mode==='editor');
-      const top=el('div','widget-top'), badge=el('span','widget-icon');badge.append(icon(c.kind));top.append(badge,el('span','widget-title',c.title));card.append(top);
+      // Component types belong in the editor library, not in the finished design.
+      if(c.title.trim()&&c.title.trim()!==defaultTitles[c.kind]){const top=el('div','widget-top');top.append(el('span','widget-title',c.title));card.append(top);}
       const value=el('div','widget-value'),feedback=el('div','widget-feedback');feedback.setAttribute('aria-live','polite');
       if(c.kind==='text')card.append(el('div','widget-text',c.text));
       else if(c.kind==='image'){const a=documentModel.assets.find(a=>a.id===c.assetID);if(a){const img=el('img','widget-image');img.alt=c.title;img.src=`data:${a.mime};base64,${a.data}`;card.append(img);}else card.append(el('div','widget-text','Bild auswählen'));}
@@ -59,7 +62,7 @@
       if(known&&['light','switch'].includes(n.c.kind)&&['on','off'].includes(v.value))text=v.value==='on'?'Ein':'Aus';
       if(known&&typeof v.value==='number')text=new Intl.NumberFormat('de-DE',{maximumFractionDigits:2}).format(v.value);
       if(known&&n.c.unit)text+=' '+n.c.unit;
-      if(n.c.kind==='camera'){text=known?(options.mode==='editor'?'Vorschau · Einzelbilder':n.c.cameraMode==='snapshots'?'Livebilder · alle 2 Sekunden':'Live · MJPEG'):(v?.reason||'Kamera nicht verfügbar');if(n.camera&&options.mode==='editor'){if(v?.image){if(n.camera.src!==v.image)n.camera.src=v.image;}else n.camera.removeAttribute('src');}}
+      if(n.c.kind==='camera'){text=known?(options.mode==='editor'?'Vorschau · Einzelbilder':n.cameraReady?(n.c.cameraMode==='snapshots'?'Livebilder · alle 2 Sekunden':'Live · MJPEG'):'Livebild wird geladen …'):(v?.reason||'Kamera nicht verfügbar');if(n.camera&&options.mode==='editor'){if(v?.image){if(n.camera.src!==v.image)n.camera.src=v.image;}else n.camera.removeAttribute('src');}}
       if(n.cameraError&&n.c.kind==='camera')text='Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen';
       if(n.value.textContent!==text)n.value.textContent=text;
       n.card.classList.toggle('is-active',known&&(v.value==='on'||v.value===true||n.c.kind==='camera'||n.c.kind==='graph'));
@@ -92,9 +95,10 @@
     for(const [id,n] of nodes){if(!n.camera)continue;const rect=n.card.getBoundingClientRect(),visible=!document.hidden&&rect.bottom>0&&rect.top<innerHeight&&values[id]?.known&&!pausedCameras.has(id)&&active<4;
       const button=n.card.querySelector('.camera-pause');button.textContent=pausedCameras.has(id)?'Livebild fortsetzen':'Livebild pausieren';
       if(!visible){n.camera.removeAttribute('src');n.cameraAt=0;continue;}active++;
+      if(!n.cameraReady&&n.camera.naturalWidth>0){n.cameraReady=true;n.cameraError=false;n.camera.classList.remove('camera-unavailable');applyValues();}
       const now=Date.now(),interval=n.c.cameraMode==='snapshots'?2000:46000;
       if(now-n.cameraAt<interval)continue;
-      n.cameraAt=now;n.camera.onload=()=>{if(n.cameraError){n.cameraError=false;applyValues();}};n.camera.onerror=()=>{n.cameraError=true;n.value.textContent='Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen';n.cameraAt=Date.now()+10000-interval;};
+      n.cameraAt=now;n.camera.onload=()=>{n.cameraReady=true;n.cameraError=false;n.camera.classList.remove('camera-unavailable');applyValues();};n.camera.onerror=()=>{n.cameraReady=false;n.cameraError=true;n.camera.classList.add('camera-unavailable');n.value.textContent='Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen';n.cameraAt=Date.now()+10000-interval;};
       n.camera.src=new URL(`api/published/${published.id}/camera/${id}?revision=${encodeURIComponent(published.revision)}&t=${now}`,location.href).href;
     }
   }
@@ -102,7 +106,7 @@
   async function act(c,command){if(options.mode!=='viewer'||inflight.has(c.id)||!values[c.id]?.known)return;inflight.add(c.id);applyValues();const n=nodes.get(c.id);n.feedback.textContent='Aufruf wird gesendet …';try{const result=await request('api/published/'+published.id+'/actions',{componentID:c.id,revision:published.revision,requestID:crypto.randomUUID(),...command});n.feedback.textContent=result.message;}catch(e){n.feedback.textContent=e.name==='AbortError'?'Antwort ausstehend. Gerätezustand prüfen; nicht automatisch wiederholt.':e.message;}finally{inflight.delete(c.id);applyValues();}}
   async function refresh(){if(loading||document.hidden||!published)return;loading=true;const epoch=sequence;try{const result=await request('api/published/'+published.id+'/values');if(epoch!==sequence)return;if(result.revision!==published.revision){await loadPublished(published.id);return;}values=result.values;applyValues();root.querySelector('.dash-status').textContent=result.connected?'Mit Home Assistant verbunden':'Home Assistant nicht verbunden';}catch(e){values={};applyValues();const status=root.querySelector('.dash-status');if(status)status.textContent='Verbindung unterbrochen · Bedienung pausiert';}finally{loading=false;}}
   async function loadPublished(id){sequence++;published=await request('api/published/'+encodeURIComponent(id));documentModel=published.document;values={};render();}
-  async function viewer(){const id=new URL(location.href).searchParams.get('dashboard');try{if(id){await loadPublished(id);await refresh();timer=setInterval(refresh,1000);cameraTimer=setInterval(cameraTick,1000);}else{const list=await request('api/published');root.replaceChildren();const back=el('a','dash-back','‹ Runtime verwalten');back.href='../';root.append(back,el('h1','','Dein Zuhause'));const catalog=el('div','dash-catalog');catalog.style.marginTop='24px';for(const d of list.dashboards){const a=el('a','',d.title);a.href='?dashboard='+encodeURIComponent(d.id);a.append(el('small','',d.pages+' Seiten'));catalog.append(a);}root.append(catalog);if(!list.dashboards.length)root.append(el('p','dash-status','Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.'));}}catch(e){root.replaceChildren(el('p','dash-status',e.message));}}
+  async function viewer(){const id=new URL(location.href).searchParams.get('dashboard');try{if(id){await loadPublished(id);await refresh();timer=setInterval(refresh,1000);cameraTimer=setInterval(cameraTick,1000);}else{const list=await request('api/published');root.replaceChildren();root.append(el('h1','','Dashboards'),el('p','dash-catalog-subtitle','Dein Zuhause. So wie du es gestaltet hast.'));const catalog=el('div','dash-catalog');catalog.style.marginTop='24px';for(const d of list.dashboards){const a=el('a','',d.title);a.href='?dashboard='+encodeURIComponent(d.id);a.append(el('small','',d.pages+' Seiten'));catalog.append(a);}root.append(catalog);if(!list.dashboards.length)root.append(el('p','dash-status','Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.'));}}catch(e){root.replaceChildren(el('p','dash-status',e.message));}}
   window.Nodivra={boot(o){options=o;if(o.mode==='viewer')viewer();else bridge({type:'ready'});},update(p){const modelChanged=!!p.document&&JSON.stringify(p.document)!==signature;if(p.document)signature=JSON.stringify(p.document);const layoutChanged=p.pageID!==payload.pageID||p.viewport!==payload.viewport||p.preview!==payload.preview;payload={...payload,...p};selected=payload.selection||'';values=payload.values||{};pageID=payload.pageID||pageID;documentModel=payload.document;if(modelChanged||layoutChanged){render();}else{markSelection();applyValues();}}};
   let lastViewport='';new ResizeObserver(()=>{if(options.mode==='viewer'&&documentModel){const v=viewport();if(v!==lastViewport){lastViewport=v;render();}}}).observe(root);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCameras();else{cameraTick();refresh();}});

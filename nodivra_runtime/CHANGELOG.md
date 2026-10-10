@@ -1,3 +1,11 @@
+# 0.9.1
+
+- Home-Assistant-Seitenleiste: „Nodivra Dashboards“ öffnet die Dashboard-Auswahl direkt.
+- Feste Navigation für Dashboards, Automationen und Runtime; Dashboard-Seiten stehen links.
+- Komponenten ohne generische Typüberschriften und Editor-Symbole; eigene Titel bleiben erhalten.
+- Kamera zeigt „Live“ erst nach Bildempfang und blendet defekte Bilder aus.
+- Kompakte Navigation auf Smartphones. Bestehende Entwürfe, Automationen und Zugangsschlüssel bleiben erhalten.
+
 # 0.9.0
 
 - Eigenständige Dashboards mit Seiten, gemeinsamen Designvorgaben und derselben Darstellung wie die Mac-Vorschau.
