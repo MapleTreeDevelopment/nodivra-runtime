@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "example_only",
+  "name": "Schema-Beispiel – keine reale Registerbelegung",
+  "points": [
+    {"id": "temperature", "name": "Temperatur", "function": 4, "address": 0, "type": "int16", "scale": 0.1, "unit": "°C", "invalid": [-32768]},
+    {"id": "power", "name": "Leistung", "function": 3, "address": 10, "type": "float32", "order": "ABCD", "unit": "W"},
+    {"id": "contact", "name": "Kontakt", "function": 2, "address": 0, "type": "bool"},
+    {"id": "fault", "name": "Störungsbit", "function": 3, "address": 20, "type": "bool", "bit": 3}
+  ]
+}

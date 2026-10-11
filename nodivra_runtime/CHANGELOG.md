@@ -1,3 +1,10 @@
+## 0.16.0
+
+- Lesende Modbus-TCP-Suche, Geräteidentifikation und SunSpec-Modellerkennung.
+- Importierbare JSON-Geräteprofile und gemeinsame Datenpunkte für digitale/analoge Automationseingänge.
+- Live-Messwerte mit Qualität; bei veralteten oder fehlenden Eingängen pausiert die betroffene Automation.
+- Konfiguration bleibt in modbus.sqlite gespeichert. Kein automatischer Netzwerkscan und keine Modbus-Schreibaktionen.
+
 ## 0.15.0
 
 - Freie Inhaltspositionen, Sichtbarkeit, Ausrichtung und Schriftgröße je Geräteansicht.
