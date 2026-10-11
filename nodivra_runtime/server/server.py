@@ -17,10 +17,9 @@ from collections import deque
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from modbus_service import ModbusService, ModbusError
 from dashboards import DashboardService, DashboardError
 
-VERSION = "0.17.1"
+VERSION = "0.18.0"
 from dashboard_access import display_key, display_request
 
 def canonical(value):
@@ -336,7 +335,6 @@ class Runtime:
         self.saved_at = {}
         self.recovery_task = None
         self.dashboards = DashboardService(self, path)
-        self.modbus = ModbusService(path)
 
     def lock(self, identity):
         return self.locks.setdefault(identity, asyncio.Lock())
@@ -387,7 +385,6 @@ class Runtime:
     async def start(self, app):
         await self.engine.start()
         await self.ha.start()
-        await self.modbus.start()
         self.ticker = asyncio.create_task(self.tick())
 
     async def close(self, app):
@@ -408,7 +405,6 @@ class Runtime:
             with contextlib.suppress(Exception):
                 await self.save_checkpoint(identity, force=True)
         await self.ha.close()
-        await self.modbus.close()
         for task in self.tasks.values():
             task.cancel()
         await asyncio.gather(*self.tasks.values(), return_exceptions=True)
@@ -434,7 +430,7 @@ class Runtime:
         if self.closing:
             return
         for identity in list(self.running):
-            if self.record(identity)["package"].get("protocolVersion", 1) >= 2 and not any(not key.startswith(("nodivra_input.", "nodivra_modbus.")) for key in self.inputs.get(identity, [])) and not (await self.validate(self.record(identity)["package"]))["deviceActions"]:
+            if self.record(identity)["package"].get("protocolVersion", 1) >= 2 and not any(not key.startswith(("nodivra_input.",)) for key in self.inputs.get(identity, [])) and not (await self.validate(self.record(identity)["package"]))["deviceActions"]:
                 continue
             # Do not wait on an action while the WebSocket receive loop is closing.
             asyncio.create_task(self.pause_locked(identity, "Home Assistant getrennt. Nach dem Abgleich erneut aktivieren."))
@@ -461,13 +457,8 @@ class Runtime:
             try:
                 record = self.record(identity)
                 check = self.inputs[identity]
-                if not self.ha.connected and (any(not key.startswith(("nodivra_input.", "nodivra_modbus.")) for key in check) or (await self.validate(record["package"]))["deviceActions"]):
+                if not self.ha.connected and (any(not key.startswith(("nodivra_input.",)) for key in check) or (await self.validate(record["package"]))["deviceActions"]):
                     await self.pause(identity, "Home Assistant getrennt. Wiederanlauf wartet auf aktuelle Eingänge.", interrupted=True)
-                    return
-                modbus_states = self.modbus.values()
-                missing = [key for key in check if key.startswith("nodivra_modbus.") and key not in modbus_states]
-                if missing:
-                    await self.pause(identity, "Modbus-Datenpunkt nicht verfügbar oder veraltet. Verbindung prüfen und erneut aktivieren.", interrupted=True)
                     return
                 cursor = self.cursors[identity]
                 if self.ha.history and cursor < self.ha.history[0][0] - 1:
@@ -488,7 +479,7 @@ class Runtime:
                 if not frames:
                     frames.append(self.input_states[identity])
                 if record["package"].get("protocolVersion", 1) >= 2:
-                    frames = [{k: v for k, v in self.ha.states.items() if not k.startswith("nodivra_modbus.")} | modbus_states | self.virtual_values.get(identity, {})]
+                    frames = [self.ha.states | self.virtual_values.get(identity, {})]
                 for states in frames:
                     result = await self.engine.call(op="step", id=identity, now=time.monotonic()-start, date=time.time(), states=states)
                     self.snapshots[identity] = result | {"observedAt": time.time()}
@@ -575,8 +566,6 @@ class Runtime:
                 response = await handler(request)
                 if request.path.startswith("/api/v1/dashboards"): response.headers["Cache-Control"] = "no-store"
                 return response
-            except ModbusError as error:
-                return problem(422, str(error))
             except DashboardError as error:
                 return problem(error.status, error.message)
             except web.HTTPException as error:
@@ -587,7 +576,6 @@ class Runtime:
                 return problem(503, "Runtime vorübergehend nicht verfügbar. Schreibstatus vor einer Wiederholung prüfen.")
         app = web.Application(middlewares=[boundary], client_max_size=4*1024*1024+65536)
         self.dashboards.routes(app)
-        self.modbus.routes(app)
         app.router.add_get("/api/v1/dashboard-connection", self.dashboard_connection)
         app.router.add_get("/health", self.health)
         app.router.add_get("/api/v1/status", self.status)
@@ -615,7 +603,7 @@ class Runtime:
         return web.json_response({"service": "nodivra-runtime", "version": VERSION}, status=200 if ready else 503)
 
     async def status(self, request):
-        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "modbus.read.v1", "modbus.discovery.v2", "dashboards.documents.v1", "dashboards.display.v1", "dashboards.card-styles.v1", "dashboards.visual-rules.v1", "dashboards.composition.v1", "automations.update-resume.v1", "dashboards.page-branding.v1", "dashboards.weather.v1", "dashboards.designer.v2"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
+        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "dashboards.documents.v1", "dashboards.display.v1", "dashboards.card-styles.v1", "dashboards.visual-rules.v1", "dashboards.composition.v1", "automations.update-resume.v1", "dashboards.page-branding.v1", "dashboards.weather.v1", "dashboards.designer.v2"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
 
     async def list_programs(self, request):
         return web.json_response({"automations": self.records()})
@@ -733,7 +721,7 @@ class Runtime:
                 check = await self.validate(record["package"])
                 if not check["valid"]:
                     return web.json_response(check, status=422)
-                if (check["deviceActions"] or any(not e.startswith(("nodivra_button.", "nodivra_input.", "nodivra_modbus.")) for e in check["inputs"])) and not self.ha.connected:
+                if (check["deviceActions"] or any(not e.startswith(("nodivra_button.", "nodivra_input.",)) for e in check["inputs"])) and not self.ha.connected:
                     return problem(409, "Zuerst Home Assistant verbinden. Die Automation bleibt deaktiviert.")
                 if any(e.startswith("nodivra_button.") for e in check["inputs"]):
                     return problem(422, "Virtuelle Taster sind vorerst nur in der lokalen Simulation bedienbar. Für die Runtime eine reale Eingabe wählen.")
@@ -760,9 +748,7 @@ class Runtime:
                     virtual.update(stored["virtual"])
                 elif automatic:
                     return problem(409, "Kein bestätigter Zustand für den automatischen Wiederanlauf vorhanden.")
-                states = {k: v for k, v in self.ha.states.items() if not k.startswith("nodivra_modbus.")} | self.modbus.values() | virtual
-                if any(key.startswith("nodivra_modbus.") and key not in states for key in check["inputs"]):
-                    return problem(409, "Modbus-Eingänge noch nicht verfügbar. Datenpunkte und Verbindung prüfen.")
+                states = self.ha.states | virtual
                 if (checkpoint or automatic) and any(states.get(key) in (None, "unknown", "unavailable") for key in check["inputs"]):
                     return problem(409, "Wiederanlauf wartet auf verfügbare, aktuelle Eingänge.")
                 self.virtual_values[identity] = virtual

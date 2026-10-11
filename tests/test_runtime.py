@@ -153,33 +153,24 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         wires = [dict(id=str(uuid.uuid4()), source=a['id'], target=b['id'], input=0) for a,b in pairs]
         return dict(protocolVersion=2, timeZone='Europe/Berlin', graph=dict(formatVersion=3, id=str(uuid.uuid4()), title='PLC', blocks=[source, marker, contact, output], wires=wires))
 
-    async def test_modbus_input_flows_into_engine_and_stale_pauses(self):
-        import time
-        from modbus_service import profile_checked
-        key='nodivra_modbus.test_temperature'
-        self.runtime.modbus.devices=[dict(id='test',name='Test',interval=1,profile=profile_checked(dict(schemaVersion=1,id='test',name='Test',points=[dict(id='temperature',name='Temperatur',function=3,address=0,type='int16')])))]
-        self.runtime.modbus.samples[key]=dict(value=23.5,quality='valid',updated=time.time(),_at=time.monotonic())
-        p=self.plc_package(analog=True,entity=key)
-        r=await self.upload(p);await self.enable(r)
-        await asyncio.sleep(.15)
-        live=await self.request('GET','live/'+r['id'])
-        self.assertEqual(live['analogSignals'][p['graph']['blocks'][0]['id'].upper()],23.5)
-        self.runtime.ha.connected=False
-        await asyncio.sleep(.15)
-        self.assertIn(r['id'],self.runtime.running)
-        self.runtime.modbus.samples[key]['_at']-=100
-        await asyncio.sleep(.2)
-        record=await self.request('GET','automations/'+r['id'])
-        self.assertFalse(record['enabled']);self.assertIn('Modbus',record['error'])
-        self.assertEqual(self.calls,[])
+    async def test_retired_modbus_inputs_are_rejected(self):
+        p = self.plc_package(analog=True, entity='nodivra_modbus.old_temperature')
+        result = await self.runtime.validate(p)
+        self.assertFalse(result['valid'])
+        self.assertTrue(any('Home-Assistant-Entität' in issue['message'] for issue in result['issues']))
+        await self.request('GET', 'modbus', expected=404)
+        status = await self.request('GET', 'status')
+        self.assertFalse(any(cap.startswith('modbus.') for cap in status['capabilities']))
 
-    async def test_modbus_api_auth_and_profile_persistence(self):
-        async with self.client.get(f'http://127.0.0.1:{self.port}/api/v1/modbus',headers={'Authorization':'Bearer wrong'}) as response:
-            self.assertEqual(response.status,401)
-        await self.request('POST','modbus/scan',dict(network='8.8.8.8/32'),expected=422)
-        profile=dict(schemaVersion=1,id='test',name='Test',points=[dict(id='input',name='Kontakt',function=2,address=0,type='bool')])
-        await self.request('POST','modbus/profiles',profile)
-        self.assertEqual((await self.request('GET','modbus'))['profiles'][0]['id'],'test')
+    async def test_home_assistant_analog_input_flows_into_engine(self):
+        self.runtime.ha.states['sensor.logo_temperature'] = '23.5'
+        p = self.plc_package(analog=True, entity='sensor.logo_temperature')
+        r = await self.upload(p)
+        await self.enable(r)
+        await asyncio.sleep(.15)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertEqual(live['analogSignals'][p['graph']['blocks'][0]['id'].upper()], 23.5)
+        self.assertEqual(self.calls, [])
 
     async def test_plc_virtual_inputs_are_program_scoped_and_revision_checked(self):
         p = self.plc_package(); r = await self.upload(p); await self.enable(r)

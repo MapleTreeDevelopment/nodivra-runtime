@@ -1,22 +1,18 @@
-# Nodivra Runtime 0.17.1 und Nodivra Dashboards 0.6.0
+# Nodivra Runtime 0.18.0 und Nodivra Dashboards 0.6.0
 
-## Neu in Runtime 0.17.1
+## Neu in Runtime 0.18.0
 
-- Zusätzliche lesende Coil-/Eingangsprüfungen und fünf Sekunden Verbindungswartezeit im PLC-Ersatzweg, wenn Identifikation/Holding-Register nicht antworten.
-- Erkannte Wartezeit bleibt für spätere Verbindungen erhalten; Profile können `connectionDelay` festlegen.
-- Erreichbare TCP-Hosts ohne bestätigte Modbus-Antwort werden separat gemeldet (Anzeige ab Mac-App 0.29.1).
+Die eigene Modbus-Anbindung samt Netzwerksuche, SunSpec und Geräteprofilen wurde entfernt. Nodivra verwendet die vorhandenen Home-Assistant-Entitäten auch für Modbus-Geräte. Die Integration und Geräteverbindung werden ausschließlich in Home Assistant eingerichtet.
 
-## Automatische Suche seit Runtime 0.17.0
+- Kontakte/Zustände: Digitaler Eingang → Home Assistant.
+- Messwerte: Analoger Eingang → Home Assistant.
+- Geräte steuern: HA-Aktion oder passender Ausgang mit bestehender Entität.
+- Alte direkte `nodivra_modbus.*`-Eingänge werden ausdrücklich beanstandet; die zugehörige HA-Entität muss ausgewählt werden. Keine automatische Zuordnung.
+- Vorhandene HA-Integrationen und Automationen werden nicht gelöscht. Alte Modbus-Datenbanken bleiben unbenutzt für eine mögliche Rückkehr erhalten.
 
-- Ein-Klick-Suche aus Mac-App 0.29.0: private IPv4-Netze des HA-Hosts automatisch erkennen, Modbus auf Port 502 suchen und Unit-IDs 1–247 sowie 0/255 prüfen.
-- Fortschritt, sofortige Ergebnisse und Abbruch; erweiterte Suche für eigene Netzbereiche, Ports und Unit-IDs.
-- Supervisor-Infozugriff mit Standardrolle für die Netzerkennung; Docker-Netz ausgeschlossen. Maximal 4096 Adressen, kein Suchlauf beim Runtime-Start.
-- Gateway-Ausnahmen für nicht erreichbare Teilnehmer zählen nicht als gefundenes Gerät. Geräte, die Unit-IDs ignorieren, können mehrfach erscheinen.
-- SunSpec und importierbare Profile bleiben verfügbar; ausschließlich lesende Modbus-Zugriffe.
+[Modbus-Geräte über Home Assistant verwenden](docs/MODBUS.md)
 
-[Modbus-Einrichtung, Geräteprofile und Grenzen](docs/MODBUS.md)
-
-Vor dem Update eine vollständige HA-Sicherung erstellen. Runtime auf 0.17.1 aktualisieren; Nodivra Dashboards bleibt bei 0.6.0. Die vorhandene Update-Auswahl kann zuvor aktive Automationen einmalig fortsetzen. Die Geräteabnahme der neuen Modbus-Anbindung erfolgt mit dem konkreten Gerät und seiner Registerbeschreibung.
+Mac-App 0.30.0 entfernt die Geräteverwaltung und den direkten Modbus-Eingang. Nodivra Dashboards bleibt unverändert bei 0.6.0. Die vorhandene Update-Auswahl zum Fortsetzen aktiver Automationen bleibt erhalten.
 
 [Entity-Abdeckung und Darstellungsgrenzen](docs/DASHBOARD-ENTITY-COVERAGE.md)
 
@@ -24,7 +20,7 @@ Vor dem Update eine vollständige HA-Sicherung erstellen. Runtime auf 0.17.1 akt
 
 **Nodivra Dashboards** ist eine zusätzliche Home-Assistant-App mit eigenem Webdienst und Seitenleisteneintrag. Die gemeinsame Runtime speichert weiterhin alle Entwürfe, veröffentlichten Dashboards und Versionen und übernimmt Geräteaktionen. Ein Update des Webdienstes benötigt keinen Neustart der Automationsengine. Dashboards werden ausschließlich über Nodivra Dashboards geöffnet; die Runtime-Oberfläche verwaltet Automationen und Einstellungen.
 
-Nach einer vollständigen HA-Sicherung die Runtime auf 0.17.1 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.6.0** installieren. In der Mac-App **Nodivra 0.23 → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
+Nach einer vollständigen HA-Sicherung die Runtime auf 0.18.0 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.6.0** installieren. In der Mac-App **Nodivra 0.23 → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
 
 Der zusätzliche Dienst hat standardmäßig keinen freigegebenen LAN-Port, keine eigene Automationsengine und keine Supervisor-Verwaltungsrechte. Zugriff erfolgt über HA Ingress mit einem Administratorkonto; optional ist eine eigene Browser-Seite für gekoppelte Browser verfügbar. Der Browser erhält keine Runtime-Zugangsschlüssel. Vorhandene Dashboard-Daten müssen weder kopiert noch erneut veröffentlicht werden.
 

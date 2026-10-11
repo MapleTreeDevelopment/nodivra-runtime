@@ -1,3 +1,8 @@
+# 0.18.0
+
+- Direkte Modbus-Anbindung, Netzwerksuche, SunSpec und Geräteprofile entfernt. Vorhandene Home-Assistant-Entitäten dienen als Ein- und Ausgänge.
+- Alte direkte Modbus-Eingänge werden mit einem Hinweis zur Auswahl einer HA-Entität abgelehnt. Bestehende Automationen und HA-Integrationen bleiben erhalten.
+
 ## 0.17.1
 
 - Lesender Erkennungs-Ersatzweg für Coils, diskrete Eingänge und Input-Register, wenn Identifikation/Holding-Register keine gültige Antwort liefern.

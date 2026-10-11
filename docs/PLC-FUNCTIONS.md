@@ -69,7 +69,7 @@ Alle neuen Funktionen laufen in derselben Swift-Engine auf dem Mac und in der Ru
 
 R bedeutet Rücksetzen. Beim RS/SR- und Stromstoßrelais ist der Vorrang wählbar; bei anderen Funktionen hat Reset Vorrang. Unbeschaltete digitale Sonderfunktionspins sind Aus, optionale En-Pins von Überwachung/PWM/Multiplexer sind Ein. Nicht vorhandene analoge Pflichtanschlüsse werden diagnostiziert. Zahlen-/Auswahlwerte werden vor Ausführung geprüft.
 
-Seit Runtime 0.7 können Merker, Register, Zeit- und Zählstände erhalten und optional fortgesetzt werden. Ohne Remanenz bleiben Programme nach Neustart pausiert und werden neu initialisiert. Noch offen: programmübergreifende Merker, weitere Parameterreferenzen außerhalb der drei grundlegenden Zeitbausteine, Hardware-Spezialmerker, VM/S7/Modbus-Anbindung, Soft-Comfort-Dateiformate, wiederverwendbare Unterprogramme und der oben ausgewiesene zusätzliche Optionsumfang.
+Seit Runtime 0.7 können Merker, Register, Zeit- und Zählstände erhalten und optional fortgesetzt werden. Ohne Remanenz bleiben Programme nach Neustart pausiert und werden neu initialisiert. Noch offen: programmübergreifende Merker, weitere Parameterreferenzen außerhalb der drei grundlegenden Zeitbausteine, Hardware-Spezialmerker, VM/S7-Anbindung, Soft-Comfort-Dateiformate, wiederverwendbare Unterprogramme und der oben ausgewiesene zusätzliche Optionsumfang.
 
 Erweiterte Programme verwenden Graphformat 4 / Runtime-Protokoll 3. Ältere Formate 2/3 und Protokolle 1/2 bleiben unterstützt. Eine ältere Runtime wird vor Transfer neuer Funktionen abgewiesen. Neue Dokumente nicht mit einer älteren App überschreiben; vorherige Projektdateien und unveränderte lokale Entwürfe bleiben gesichert.
 
@@ -78,3 +78,5 @@ Erweiterte Programme verwenden Graphformat 4 / Runtime-Protokoll 3. Ältere Form
 Wertauswahl mit 2–8 unabhängigen Bedingungen, konfigurierbaren Werten, Standardwert und eindeutiger Priorität. Eingänge von oben nach unten: I1 gewinnt vor I2 usw. Zeitwerte werden in Sekunden an AQ ausgegeben. Zahlenmodus bleibt auch für andere Parameterverknüpfungen nutzbar.
 
 Ein-/Ausschaltverzögerung und Zeitimpuls besitzen optional T (analog) neben Trg und R. Übernahme am Start der Laufzeit; laufende Zeit bleibt konstant. Ungültiges T beim Start pausiert die Ausführung. Diese Erweiterung benötigt Graphformat 5 / Protokoll 4. Feste Zeiten und andere bisherige Funktionen bleiben rückwärtskompatibel. Details: [Variable Zeiten](VARIABLE-TIMES.md).
+
+Modbus-Geräte werden über vorhandene Home-Assistant-Entitäten eingebunden. Eine eigene Modbus-Anbindung ist nicht vorgesehen.

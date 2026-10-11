@@ -42,6 +42,7 @@ public enum RuntimeCompiler {
         if ordered(g).count != g.blocks.count { fail("Eine Rückführung benötigt einen Merker. Eine Schleife ohne Zyklusspeicher ist nicht ausführbar.") }
         var inputs = Set<String>(), actions = 0
         for b in g.blocks {
+            if b.entityID.hasPrefix("nodivra_modbus.") { fail("Direkte Modbus-Eingänge werden nicht mehr unterstützt. Wähle die zugehörige Home-Assistant-Entität.", b) }
             if let reset = b.options["resettable"], reset.bool == nil { fail("Rücksetzen benötigt Ein oder Aus.", b) }
             if b.kind == .latch && !["reset", "set"].contains(b.text("priority", "reset")) { fail("Wähle Setzen oder Rücksetzen als Vorrang.", b) }
             if b.isGate && g.wires.allSatisfy({ $0.target != b.id }) { fail("Verbinde mindestens einen Eingang.", b) }
