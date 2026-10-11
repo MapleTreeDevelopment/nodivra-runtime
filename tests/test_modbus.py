@@ -40,7 +40,7 @@ class ProfileTests(unittest.TestCase):
 
 class TCPTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.accepted_unit=None;self.calls=[];self.bad=False;self.disconnect=False;self.sockets=set();self.reg={10:215,40000:0x5375,40001:0x6e53,40002:1,40003:66,40070:103,40071:50,40122:65535,40123:0}
+        self.coils_only=False;self.accepted_unit=None;self.calls=[];self.bad=False;self.disconnect=False;self.sockets=set();self.reg={10:215,40000:0x5375,40001:0x6e53,40002:1,40003:66,40070:103,40071:50,40122:65535,40123:0}
         raw=b'TestMaker'.ljust(32,b'\0')+b'TestModel'.ljust(32,b'\0')+bytes(68)
         for i,w in enumerate(struct.unpack('>'+'H'*66,raw)):self.reg[40004+i]=w
         # model 103 W at model offset 14; W_SF at 15.
@@ -51,11 +51,12 @@ class TCPTests(unittest.IsolatedAsyncioTestCase):
         await self.client.close();self.server.close();await self.server.wait_closed()
         for w in self.sockets.copy():w.close()
     async def serve(self,r,w):
-        self.sockets.add(w)
+        self.sockets.add(w);connected=time.monotonic()
         try:
             while True:
                 tid,proto,n,unit=struct.unpack('>HHHB',await r.readexactly(7));p=await r.readexactly(n-1);fc=p[0];self.calls.append(fc)
                 if self.disconnect:return
+                if self.coils_only and (fc!=1 or time.monotonic()-connected<4.9):return
                 if self.accepted_unit is not None and unit!=self.accepted_unit:body=bytes([fc|128,11])
                 elif fc==43:
                     body=bytes([43,14,1,1,0,0,2,0,4])+b'Test'+bytes([1,5])+b'Model'
@@ -121,6 +122,17 @@ class TCPTests(unittest.IsolatedAsyncioTestCase):
             await s.run_scan(['127.0.0.1'],self.port,[1,42,247,255])
             self.assertEqual([d['unit'] for d in s.scan['devices']],[42])
             self.assertEqual(s.scan['completed'],4);await s.close()
+    async def test_coil_only_plc_needing_connection_delay_is_discovered(self):
+        self.coils_only=True
+        with tempfile.TemporaryDirectory() as path:
+            s=ModbusService(path)
+            found=await s.inspect_unit('127.0.0.1',self.port,1)
+            self.assertIsNotNone(found)
+            self.assertEqual(found['connectionDelay'],5)
+            self.assertEqual(found['identity'],{})
+            self.assertIsNone(found['sunspec'])
+            self.assertTrue(all(fc in (1,2,3,4,43) for fc in self.calls))
+            await s.close()
     async def test_api_limits_and_import(self):
         with tempfile.TemporaryDirectory() as path:
             s=ModbusService(path)
@@ -183,3 +195,20 @@ class AutoDiscoveryTests(unittest.IsolatedAsyncioTestCase):
                 task.cancel();await asyncio.gather(task,return_exceptions=True)
                 self.assertEqual(peak,1);self.assertEqual(active,0);self.assertEqual(seen,[1,42]);self.assertEqual(s.scan['status'],'cancelled')
             await s.close()
+
+class ConnectionDelayTests(unittest.IsolatedAsyncioTestCase):
+    async def test_detected_delay_is_persisted_and_invalid_profile_delay_rejected(self):
+        from unittest.mock import AsyncMock
+        class Request:
+            async def json(self):return dict(host='192.168.1.7',port=502,unit=1,name='PLC',interval=5,profile=profile())
+        with tempfile.TemporaryDirectory() as path:
+            s=ModbusService(path);s.scan={'devices':[dict(host='192.168.1.7',port=502,unit=1,connectionDelay=5)]}
+            with patch.object(s,'poll',AsyncMock()):
+                await s.add_device(Request());await asyncio.sleep(0)
+                self.assertEqual(s.devices[0]['connectionDelay'],5)
+            await s.close()
+            restored=ModbusService(path)
+            self.assertEqual(restored.devices[0]['connectionDelay'],5);await restored.close()
+        for value in (-1,11,True,'5'):
+            p=profile();p['connectionDelay']=value
+            with self.assertRaises(ModbusError):profile_checked(p)

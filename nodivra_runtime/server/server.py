@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from modbus_service import ModbusService, ModbusError
 from dashboards import DashboardService, DashboardError
 
-VERSION = "0.17.0"
+VERSION = "0.17.1"
 from dashboard_access import display_key, display_request
 
 def canonical(value):

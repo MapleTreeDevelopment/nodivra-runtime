@@ -1,6 +1,12 @@
-# Nodivra Runtime 0.17.0 und Nodivra Dashboards 0.6.0
+# Nodivra Runtime 0.17.1 und Nodivra Dashboards 0.6.0
 
-## Neu in Runtime 0.17.0
+## Neu in Runtime 0.17.1
+
+- Zusätzliche lesende Coil-/Eingangsprüfungen und fünf Sekunden Verbindungswartezeit im PLC-Ersatzweg, wenn Identifikation/Holding-Register nicht antworten.
+- Erkannte Wartezeit bleibt für spätere Verbindungen erhalten; Profile können `connectionDelay` festlegen.
+- Erreichbare TCP-Hosts ohne bestätigte Modbus-Antwort werden separat gemeldet (Anzeige ab Mac-App 0.29.1).
+
+## Automatische Suche seit Runtime 0.17.0
 
 - Ein-Klick-Suche aus Mac-App 0.29.0: private IPv4-Netze des HA-Hosts automatisch erkennen, Modbus auf Port 502 suchen und Unit-IDs 1–247 sowie 0/255 prüfen.
 - Fortschritt, sofortige Ergebnisse und Abbruch; erweiterte Suche für eigene Netzbereiche, Ports und Unit-IDs.
@@ -10,7 +16,7 @@
 
 [Modbus-Einrichtung, Geräteprofile und Grenzen](docs/MODBUS.md)
 
-Vor dem Update eine vollständige HA-Sicherung erstellen. Runtime auf 0.17.0 aktualisieren; Nodivra Dashboards bleibt bei 0.6.0. Die vorhandene Update-Auswahl kann zuvor aktive Automationen einmalig fortsetzen. Die Geräteabnahme der neuen Modbus-Anbindung erfolgt mit dem konkreten Gerät und seiner Registerbeschreibung.
+Vor dem Update eine vollständige HA-Sicherung erstellen. Runtime auf 0.17.1 aktualisieren; Nodivra Dashboards bleibt bei 0.6.0. Die vorhandene Update-Auswahl kann zuvor aktive Automationen einmalig fortsetzen. Die Geräteabnahme der neuen Modbus-Anbindung erfolgt mit dem konkreten Gerät und seiner Registerbeschreibung.
 
 [Entity-Abdeckung und Darstellungsgrenzen](docs/DASHBOARD-ENTITY-COVERAGE.md)
 
@@ -18,7 +24,7 @@ Vor dem Update eine vollständige HA-Sicherung erstellen. Runtime auf 0.17.0 akt
 
 **Nodivra Dashboards** ist eine zusätzliche Home-Assistant-App mit eigenem Webdienst und Seitenleisteneintrag. Die gemeinsame Runtime speichert weiterhin alle Entwürfe, veröffentlichten Dashboards und Versionen und übernimmt Geräteaktionen. Ein Update des Webdienstes benötigt keinen Neustart der Automationsengine. Dashboards werden ausschließlich über Nodivra Dashboards geöffnet; die Runtime-Oberfläche verwaltet Automationen und Einstellungen.
 
-Nach einer vollständigen HA-Sicherung die Runtime auf 0.17.0 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.6.0** installieren. In der Mac-App **Nodivra 0.23 → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
+Nach einer vollständigen HA-Sicherung die Runtime auf 0.17.1 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.6.0** installieren. In der Mac-App **Nodivra 0.23 → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
 
 Der zusätzliche Dienst hat standardmäßig keinen freigegebenen LAN-Port, keine eigene Automationsengine und keine Supervisor-Verwaltungsrechte. Zugriff erfolgt über HA Ingress mit einem Administratorkonto; optional ist eine eigene Browser-Seite für gekoppelte Browser verfügbar. Der Browser erhält keine Runtime-Zugangsschlüssel. Vorhandene Dashboard-Daten müssen weder kopiert noch erneut veröffentlicht werden.
 
@@ -58,7 +64,7 @@ Die Sicherung liegt zunächst auf dem HA-Datenträger. Unter Einstellungen → S
 ## Manueller Ersatzweg nach Freigabe des HA-OS-Updates
 
 1. Vollständige HA-Sicherung erstellen und herunterladen. Bei einer VM zusätzlich einen Snapshot des ausgeschalteten Systems anlegen, bevor das Betriebssystem verändert wird.
-2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.17.0.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
+2. `python3 Scripts/package-runtime.py` im Nodivra-Projekt erzeugt `Build/Nodivra-Runtime-0.17.1.zip`. Das ZIP enthält den Ordner `nodivra_runtime`. Unter `/addons/nodivra_runtime` müssen `config.yaml`, `Dockerfile`, `server` und `Engine` liegen. Vor dem Ersetzen eines vorhandenen Ordners diesen sichern. Später bei Updates das aktuelle Paket verwenden; vorbereitete ältere Dateien allein reichen nicht.
 3. Auf einer von Supervisor unterstützten HA-OS-Version den App-Store neu laden. Nodivra Runtime erscheint unter den lokalen Apps. Installieren. Der erste Build lädt offizielle Swift-/Python-Abhängigkeiten und benötigt Zeit und freien Speicher. Die Architektur wird vom Build gewählt.
 4. Runtime starten und **Weboberfläche öffnen** wählen. Unter **Zugang & Einstellungen** dort **Schlüssel generieren** und **Schlüssel speichern & verwenden** anklicken. 64 zufällige Zeichen werden erzeugt und in den HA-App-Optionen gespeichert; ein bisheriger gültiger Schlüssel wird erst nach Bestätigung ersetzt. Der Schlüssel lässt sich verborgen halten und kopieren. Ohne gültigen Schlüssel bleibt die externe Runtime-API gesperrt, die Einrichtung ist erreichbar.
 5. Auf dem Mac Runtime-Adresse `http://homeassistant.local:8668` und denselben Schlüssel eintragen. Lokales HTTP muss ausdrücklich erlaubt werden. Schlüssel und Programme laufen bei HTTP unverschlüsselt über das lokale Netz; Port 8668 nicht öffentlich freigeben. Die aktuelle Runtime terminiert selbst kein TLS.

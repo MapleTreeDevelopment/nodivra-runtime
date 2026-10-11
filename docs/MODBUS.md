@@ -59,3 +59,10 @@ Die Suche garantiert keine vollständige Inventarisierung: nicht erreichbare VLA
 Modbus-fähige LOGO!-Geräte mit freigeschaltetem TCP-Server können gefunden und über passende Profile gelesen werden. Der Scan liest keine LOGO!-Projektdateien oder symbolischen Kontaktnamen aus. I/Q/M/Analogwerte benötigen die Adresstabelle der konkreten Hardware/Firmware bzw. Projektzuordnung aus LOGO!Soft Comfort. Kein unbestätigtes universelles LOGO!-Profil wird automatisch zugewiesen. Projektverbindungen und nicht über Modbus abgebildete Kontakte werden nicht entdeckt. Nodivra schreibt derzeit keine LOGO!-Ausgänge.
 
 Referenzen: https://developers.home-assistant.io/docs/api/supervisor/endpoints/#network und https://cache.industry.siemens.com/dl/files/807/109974807/att_1299328/v4/Help_en-US_en-US.pdf
+
+
+## PLC-Erkennung ab Runtime 0.17.1
+
+Wenn Geräteidentifikation und Holding-Register keine Antwort liefern, liest die Suche zusätzlich Coils (8192, dann 0), diskrete Eingänge (0) und Input-Register (0). Der Ersatzweg wartet nach jedem neuen Verbindungsaufbau fünf Sekunden. Eine erkannte Wartezeit wird bei der Einrichtung gespeichert und auch bei späteren Neuverbindungen angewendet. Importprofile können `connectionDelay` als ganze Sekundenzahl 0–10 vorgeben. Die Adresse 8192 allein ist kein Herstellerbeweis. Keine Schreibfunktionen werden verwendet.
+
+Die API zeigt `reachableHosts` unabhängig von bestätigten Modbus-Geräten. Mac-App 0.29.1 zeigt erreichbare TCP-Hosts ohne gültige Modbus-Antwort an. Bei laufender HA-Modbus-Anbindung können Gerätefreigaben oder die Zahl gleichzeitig zulässiger Verbindungen einen zweiten Client blockieren. Ein Reset ist kein Beweis für eine falsche Registeradresse.

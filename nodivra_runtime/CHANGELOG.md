@@ -1,3 +1,10 @@
+## 0.17.1
+
+- Lesender Erkennungs-Ersatzweg für Coils, diskrete Eingänge und Input-Register, wenn Identifikation/Holding-Register keine gültige Antwort liefern.
+- Fünf Sekunden Verbindungswartezeit im PLC-Ersatzweg; erkannte Wartezeit wird beim Einrichten übernommen. Geräteprofile unterstützen `connectionDelay` (0–10 Sekunden).
+- Erreichbare TCP-Hosts werden getrennt von bestätigten Modbus-Geräten gemeldet (Anzeige ab Mac-App 0.29.1).
+- Keine Herstellerzuordnung allein anhand einer Coil-Adresse; keine Schreibaktionen.
+
 ## 0.17.0
 
 - Ein-Klick-Suche: lokale private IPv4-Netze über Home Assistant erkennen; Modbus-Unit-IDs 1–247 sowie 0 und 255 automatisch prüfen.

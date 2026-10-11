@@ -74,6 +74,7 @@ def profile_checked(p):
     require(isinstance(p,dict) and p.get('schemaVersion') == 1)
     require(isinstance(p.get('id'),str) and re.fullmatch(r'[a-zA-Z0-9_-]{1,64}',p['id']))
     require(isinstance(p.get('name'),str) and 0 < len(p['name']) <= 120)
+    require(integer(p.get('connectionDelay',0),0,10),'Verbindungswartezeit muss zwischen 0 und 10 Sekunden liegen.')
     require(isinstance(p.get('points'),list) and 0 < len(p['points']) <= 128)
     if 'match' in p:
         m=p['match'];require(isinstance(m,dict) and {'manufacturer','model'} <= set(m) <= {'manufacturer','model','version'} and all(isinstance(v,str) and 0<len(v)<=120 for v in m.values()))
@@ -94,7 +95,7 @@ def profile_checked(p):
     return p
 
 class TCP:
-    def __init__(self,host,port=502,unit=1): self.host=host;self.port=port;self.unit=unit;self.reader=None;self.writer=None;self.transaction=0
+    def __init__(self,host,port=502,unit=1,connection_delay=0): self.connection_delay=connection_delay;self.host=host;self.port=port;self.unit=unit;self.reader=None;self.writer=None;self.transaction=0
     async def close(self):
         if self.writer:
             self.writer.close()
@@ -104,7 +105,9 @@ class TCP:
         require(fc in (1,2,3,4,43), 'Nur lesende Modbus-Funktionen erlaubt.')
         try:
             async def exchange():
-                if self.writer is None: self.reader,self.writer=await asyncio.open_connection(self.host,self.port)
+                if self.writer is None:
+                    self.reader,self.writer=await asyncio.wait_for(asyncio.open_connection(self.host,self.port),2)
+                    if self.connection_delay:await asyncio.sleep(self.connection_delay)
                 self.transaction=(self.transaction+1)%65536
                 self.writer.write(struct.pack('>HHHBB',self.transaction,0,len(payload)+2,self.unit,fc)+payload);await self.writer.drain()
                 tid,protocol,length,unit=struct.unpack('>HHHB',await self.reader.readexactly(7))
@@ -115,7 +118,7 @@ class TCP:
                     raise ModbusException(pdu[1])
                 require(pdu[0]==fc,'Unerwarteter Funktionscode.')
                 return pdu[1:]
-            return await asyncio.wait_for(exchange(),2)
+            return await asyncio.wait_for(exchange(),4+self.connection_delay)
         except BaseException:
             await self.close();raise
     async def read(self,fc,address,count):
@@ -217,7 +220,7 @@ class ModbusService:
                 out.append(dict(id=key,name=p['name'],device=d['name'],unit=p.get('unit',''),kind='digital' if p['type']=='bool' else 'analog',quality='valid' if key in valid else s.get('quality','waiting') if s.get('quality')!='valid' else 'stale',value=s.get('value'),updated=s.get('updated'),error=s.get('error'),address=p['address']))
         return out
     async def poll(self,d):
-        client=TCP(d['host'],d['port'],d['unit'])
+        client=TCP(d['host'],d['port'],d['unit'],d.get('connectionDelay',d['profile'].get('connectionDelay',0)))
         try:
             while True:
                 failed=False;scale_cache={}
@@ -251,12 +254,28 @@ class ModbusService:
             except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError): pass
             if not responded:
                 try: await c.read(3,0,1);responded=True
-                except ModbusException as e: responded=e.code not in (10,11)
+                except ModbusException as e:
+                    if e.code in (10,11):return None
+                    responded=True
                 except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError): pass
-            if not responded: return None
-            try: sun=await sunspec(c)
-            except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError): pass
-            return dict(host=host,port=port,unit=unit,identity=identity,sunspec=sun)
+            if not responded:
+                # Some PLCs reset unsupported requests or require startup time.
+                # Read actual coils, including the common LOGO! output range.
+                await c.close();c.connection_delay=5
+                for fc,address in ((1,8192),(1,0),(2,0),(4,0)):
+                    try:await c.read(fc,address,1);responded=True
+                    except ModbusException as e:
+                        if e.code in (10,11):return None
+                        responded=True
+                    except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError):pass
+                    if responded:break
+            if not responded:return None
+            # Slow PLC fallback already proved Modbus; optional SunSpec probes
+            # must not delay its result or drop it when they time out.
+            if not c.connection_delay:
+                try:sun=await sunspec(c)
+                except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError):pass
+            return dict(host=host,port=port,unit=unit,identity=identity,sunspec=sun,connectionDelay=c.connection_delay)
         finally: await c.close()
 
     async def run_scan(self,hosts,port,units):
@@ -273,9 +292,10 @@ class ModbusService:
                     if writer:
                         writer.close()
                         with contextlib.suppress(Exception): await asyncio.wait_for(writer.wait_closed(),1)
+                self.scan.setdefault('reachableHosts',[]).append(host)
                 for unit in units:
                     try:
-                        result=await asyncio.wait_for(self.inspect_unit(host,port,unit),20)
+                        result=await asyncio.wait_for(self.inspect_unit(host,port,unit),50)
                         if result:self.scan['devices'].append(result)
                     except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError): pass
                     self.scan['completed']+=1
@@ -331,7 +351,10 @@ class ModbusService:
         require(isinstance(d.get('name'),str) and 0<len(d['name'])<=120 and integer(d.get('interval'),1,3600))
         p=profile_checked(d['profile']);require(len(self.devices)<32,'Maximal 32 Geräte.')
         require(not any((x['host'],x['port'],x['unit'])==(d['host'],d['port'],d['unit']) for x in self.devices),'Gerät bereits vorhanden.')
-        d={k:d[k] for k in ('host','port','unit','name','interval')};d['profile']=p;d['id']=uuid.uuid4().hex
+        delay=p.get('connectionDelay',0)
+        for found in (self.scan or {}).get('devices',[]):
+            if (found['host'],found['port'],found['unit'])==(d['host'],d['port'],d['unit']):delay=max(delay,found.get('connectionDelay',0))
+        d={k:d[k] for k in ('host','port','unit','name','interval')};d['connectionDelay']=delay;d['profile']=p;d['id']=uuid.uuid4().hex
         self.devices.append(d);self.save('devices',self.devices);self.tasks[d['id']]=asyncio.create_task(self.poll(d));return web.json_response(d)
     async def delete_device(self,r):
         identity=r.match_info['id'];task=self.tasks.pop(identity,None)
