@@ -5,7 +5,7 @@ Die Mac-App richtet Geräte über **Automationen → Datenpunkte** oder **Runtim
 ## Einrichtung
 
 1. Runtime verbinden. Eine Runtime mit der Fähigkeit `modbus.read.v1` ist erforderlich.
-2. Private IPv4-Adresse eingeben, beispielsweise `192.168.1.20/32`, oder einen ausdrücklich gewünschten Netzbereich bis `/24`. Port (normalerweise 502) und Unit-ID passend zum Gerät einstellen. Pro Suche höchstens 256 Adress-/Unit-Kombinationen, vier gleichzeitige Prüfungen. Die Suche ist abbrechbar und läuft nur auf ausdrücklichen Start.
+2. Ab Runtime 0.17.0 / Mac-App 0.29.0 genügt „Suchen“: lokale Netze und Unit-IDs werden automatisch ermittelt/geprüft. Für gezielte Adressen, Sonderports oder feste Unit-IDs „Erweiterte Suche“ öffnen. Details und Grenzen stehen unten. Die Suche ist abbrechbar und läuft nur auf ausdrücklichen Start.
 3. Gerät auswählen. Ein offener TCP-Port allein zählt nicht als Modbus-Gerät. Die Suche versucht Read Device Identification (43/14), SunSpec und nötigenfalls eine lesende Registerabfrage. Identifikation kann vom Gerät nicht unterstützt werden; Unit-ID und Port können abweichen.
 4. Bei SunSpec die gewünschten Datenpunkte auswählen. Bei anderen Geräten ein zur Modell-/Firmwareversion passendes JSON-Profil importieren und auswählen. Es werden keine Registerbereiche blind nach vermeintlichen Temperaturen oder Kontakten abgesucht.
 5. Namen und Abfragepause festlegen und die ausgewählten Datenpunkte einrichten. Die Live-Liste zeigt Wert, Einheit, letzte erfolgreiche Messung und Qualität.
@@ -46,3 +46,16 @@ Daten liegen in `/data/modbus.sqlite` und gehören zur vollständigen HA-App-Sic
 
 Nicht enthalten: Modbus RTU/serielle Schnittstellen, IPv6/DNS-Suche, Schreibausgänge, alle SunSpec-Modelle, automatische PDF-Interpretation oder eine umfassende Herstellerprofil-Sammlung. Die erste Geräteabnahme muss mit einem konkreten Modell und dessen Registerbeschreibung erfolgen.
 
+## Automatische Suche (Runtime 0.17.0 / Mac-App 0.29.0)
+
+„Suchen“ ermittelt die verbundenen privaten IPv4-Netze des HA-Hosts über `/network/info`. Das interne Add-on-/Docker-Netz wird ausgeschlossen. Bis zu 4096 Adressen insgesamt; größere Netze werden mit einem Hinweis abgelehnt, nicht still gekürzt. Kein Suchlauf beim Start der Runtime. Ohne Supervisor oder bei fehlender Berechtigung bleibt die erweiterte manuelle Suche verfügbar.
+
+Standardport 502; Unit-IDs 1–247, zusätzlich 255 und 0 für direkte TCP-Geräte. Erreichbarkeit wird einmal pro Host geprüft, danach laufen die Unit-Prüfungen sequenziell pro Host mit höchstens vier parallelen Hosts. Der Vorgang ist abbrechbar und kann bei Gateways/Timeouts viele Minuten dauern. Ergebnisse erscheinen während der Suche. Alle Zugriffe sind lesend. Ein offener Port allein reicht nicht; Gateway-Ausnahmen 10/11 werden nicht als Gerät gewertet. Geräte, die Unit-IDs ignorieren, können unter mehreren IDs erscheinen; diese werden nicht ohne Beweis zusammengeführt.
+
+Die Suche garantiert keine vollständige Inventarisierung: nicht erreichbare VLANs, deaktivierte Server, andere Ports, IPv6 und fehlende Protokollantworten benötigen passende Konfiguration. Sonderports und einzelne Unit-IDs sind über „Erweiterte Suche“ einstellbar. Bestehende Runtime 0.16 unterstützt weiter die manuelle Suche mit einer festen Unit-ID.
+
+### Siemens LOGO!
+
+Modbus-fähige LOGO!-Geräte mit freigeschaltetem TCP-Server können gefunden und über passende Profile gelesen werden. Der Scan liest keine LOGO!-Projektdateien oder symbolischen Kontaktnamen aus. I/Q/M/Analogwerte benötigen die Adresstabelle der konkreten Hardware/Firmware bzw. Projektzuordnung aus LOGO!Soft Comfort. Kein unbestätigtes universelles LOGO!-Profil wird automatisch zugewiesen. Projektverbindungen und nicht über Modbus abgebildete Kontakte werden nicht entdeckt. Nodivra schreibt derzeit keine LOGO!-Ausgänge.
+
+Referenzen: https://developers.home-assistant.io/docs/api/supervisor/endpoints/#network und https://cache.industry.siemens.com/dl/files/807/109974807/att_1299328/v4/Help_en-US_en-US.pdf

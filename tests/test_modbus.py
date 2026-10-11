@@ -40,7 +40,7 @@ class ProfileTests(unittest.TestCase):
 
 class TCPTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.calls=[];self.bad=False;self.disconnect=False;self.sockets=set();self.reg={10:215,40000:0x5375,40001:0x6e53,40002:1,40003:66,40070:103,40071:50,40122:65535,40123:0}
+        self.accepted_unit=None;self.calls=[];self.bad=False;self.disconnect=False;self.sockets=set();self.reg={10:215,40000:0x5375,40001:0x6e53,40002:1,40003:66,40070:103,40071:50,40122:65535,40123:0}
         raw=b'TestMaker'.ljust(32,b'\0')+b'TestModel'.ljust(32,b'\0')+bytes(68)
         for i,w in enumerate(struct.unpack('>'+'H'*66,raw)):self.reg[40004+i]=w
         # model 103 W at model offset 14; W_SF at 15.
@@ -56,7 +56,8 @@ class TCPTests(unittest.IsolatedAsyncioTestCase):
             while True:
                 tid,proto,n,unit=struct.unpack('>HHHB',await r.readexactly(7));p=await r.readexactly(n-1);fc=p[0];self.calls.append(fc)
                 if self.disconnect:return
-                if fc==43:
+                if self.accepted_unit is not None and unit!=self.accepted_unit:body=bytes([fc|128,11])
+                elif fc==43:
                     body=bytes([43,14,1,1,0,0,2,0,4])+b'Test'+bytes([1,5])+b'Model'
                 elif fc in (3,4):
                     a,count=struct.unpack('>HH',p[1:]);body=bytes([fc,count*2])+b''.join(struct.pack('>H',self.reg.get(a+i,0)) for i in range(count))
@@ -113,6 +114,13 @@ class TCPTests(unittest.IsolatedAsyncioTestCase):
             s=ModbusService(path);s.scan=dict(status='running',completed=0,total=1,devices=[])
             await s.run_scan(['127.0.0.1'],self.port,[1]);self.assertEqual(s.scan['status'],'complete');self.assertEqual(s.scan['completed'],1)
             self.assertEqual(len(s.scan['devices']),1);self.assertTrue(all(c in [1,2,3,4,43] for c in self.calls));await s.close()
+    async def test_scan_finds_nondefault_unit_without_gateway_ghosts(self):
+        self.accepted_unit=42
+        with tempfile.TemporaryDirectory() as path:
+            s=ModbusService(path);s.scan=dict(status='running',completed=0,total=4,devices=[])
+            await s.run_scan(['127.0.0.1'],self.port,[1,42,247,255])
+            self.assertEqual([d['unit'] for d in s.scan['devices']],[42])
+            self.assertEqual(s.scan['completed'],4);await s.close()
     async def test_api_limits_and_import(self):
         with tempfile.TemporaryDirectory() as path:
             s=ModbusService(path)
@@ -122,4 +130,56 @@ class TCPTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ModbusError):await s.begin_scan(Request(dict(network='192.168.0.0/16')))
             with self.assertRaises(ModbusError):await s.begin_scan(Request(dict(network='8.8.8.8/32')))
             await s.import_profile(Request(profile()));self.assertEqual(len(s.profiles),1)
+            await s.close()
+
+class AutoDiscoveryTests(unittest.IsolatedAsyncioTestCase):
+    def test_network_selection_filters_docker_public_and_disconnected(self):
+        from modbus_service import supervisor_networks, AUTO_UNITS
+        def interface(address, **extra):return dict(enabled=True,connected=True,type='ethernet',ipv4={'address':[address]},**extra)
+        data={'docker':{'address':'172.30.32.0/23'},'interfaces':[interface('192.168.3.2/24'),interface('192.168.3.4/24'),interface('172.30.32.2/23'),interface('8.8.8.8/24'),dict(enabled=True,connected=False,type='ethernet',ipv4={'address':['10.0.0.2/24']})]}
+        self.assertEqual([str(n) for n in supervisor_networks(data)],['192.168.3.0/24'])
+        self.assertEqual(set(AUTO_UNITS),set(range(248))|{255})
+        with self.assertRaises(ModbusError):supervisor_networks({'interfaces':[interface('10.0.0.2/8')]})
+        with self.assertRaises(ModbusError):supervisor_networks({'interfaces':[]})
+    async def test_auto_request_uses_detected_network_and_all_units(self):
+        from unittest.mock import AsyncMock
+        import ipaddress
+        class Request:
+            async def json(self):return {'automatic':True}
+        with tempfile.TemporaryDirectory() as path:
+            s=ModbusService(path)
+            with patch('modbus_service.discover_networks',AsyncMock(return_value=[ipaddress.ip_network('192.168.3.0/30')])),patch.object(s,'run_scan',AsyncMock()) as scan:
+                await s.begin_scan(Request());await s.scan_task
+                args=scan.call_args.args
+                self.assertEqual(args[0],['192.168.3.1','192.168.3.2']);self.assertIn(42,args[2]);self.assertIn(255,args[2])
+                self.assertEqual(s.scan['networks'],['192.168.3.0/30'])
+            await s.close()
+    async def test_gateway_missing_unit_is_not_a_device(self):
+        from unittest.mock import AsyncMock
+        from modbus_service import ModbusException
+        with tempfile.TemporaryDirectory() as path:
+            s=ModbusService(path)
+            with patch.object(TCP,'identify',AsyncMock(side_effect=ModbusException(11))):
+                self.assertIsNone(await s.inspect_unit('127.0.0.1',502,42))
+            await s.close()
+    async def test_units_sequential_and_cancel_stops_probes(self):
+        from unittest.mock import AsyncMock
+        class Writer:
+            def close(self):pass
+            async def wait_closed(self):pass
+        seen=[];active=0;peak=0
+        async def inspect(host,port,unit):
+            nonlocal active,peak
+            active+=1;peak=max(peak,active);seen.append(unit)
+            try:
+                if unit==42:await asyncio.sleep(10)
+                return None
+            finally:active-=1
+        with tempfile.TemporaryDirectory() as path:
+            s=ModbusService(path);s.scan=dict(status='running',completed=0,total=3,devices=[])
+            with patch('modbus_service.asyncio.open_connection',AsyncMock(return_value=(None,Writer()))),patch.object(s,'inspect_unit',inspect):
+                task=asyncio.create_task(s.run_scan(['127.0.0.1'],502,[1,42,255]))
+                while 42 not in seen:await asyncio.sleep(.01)
+                task.cancel();await asyncio.gather(task,return_exceptions=True)
+                self.assertEqual(peak,1);self.assertEqual(active,0);self.assertEqual(seen,[1,42]);self.assertEqual(s.scan['status'],'cancelled')
             await s.close()

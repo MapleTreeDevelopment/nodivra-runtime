@@ -6,16 +6,20 @@ import contextlib
 import ipaddress
 import json
 import math
+import os
 from pathlib import Path
 import re
 import sqlite3
 import struct
 import time
 import uuid
-from aiohttp import web
+from aiohttp import web, ClientSession, ClientTimeout, ClientError
 
 class ModbusError(ValueError): pass
-class ModbusException(ModbusError): pass
+class ModbusException(ModbusError):
+    def __init__(self, code):
+        self.code = code
+        super().__init__('Modbus-Ausnahme '+str(code))
 
 def require(ok, message='Ungültige Modbus-Konfiguration.'):
     if not ok: raise ModbusError(message)
@@ -26,6 +30,43 @@ def local_host(value):
     ip = ipaddress.IPv4Address(value)
     require(any(ip in ipaddress.ip_network(n) for n in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16')), 'Bitte eine private IPv4-Adresse verwenden.')
     return str(ip)
+
+# Private host networks come from the Supervisor, not the add-on's Docker subnet.
+def supervisor_networks(data):
+    networks=[]
+    docker=data.get('docker',{}).get('address')
+    docker=ipaddress.ip_network(docker,strict=False) if docker else None
+    for interface in data.get('interfaces',[]):
+        if not interface.get('enabled') or not interface.get('connected'): continue
+        if interface.get('type') not in ('ethernet','wireless','vlan'): continue
+        ipv4=interface.get('ipv4') or {}
+        addresses=ipv4.get('address',ipv4.get('ip_address',[]))
+        if isinstance(addresses,str): addresses=[addresses]
+        for address in addresses:
+            try:
+                net=ipaddress.ip_interface(address).network
+                local_host(str(net.network_address));local_host(str(net.broadcast_address))
+            except ValueError: continue
+            if docker and net.overlaps(docker): continue
+            if net not in networks: networks.append(net)
+    require(networks,'Kein privates IPv4-Netz erkannt. Bitte die erweiterte Suche verwenden.')
+    require(sum(n.num_addresses for n in networks)<=4096,'Erkannte Netze sind zu groß (maximal 4096 Adressen). Bitte einen Bereich in der erweiterten Suche wählen.')
+    return list(ipaddress.collapse_addresses(networks))
+
+async def discover_networks():
+    token=os.environ.get('SUPERVISOR_TOKEN')
+    require(token,'Automatische Netzerkennung benötigt die Home-Assistant-Runtime. Bitte die erweiterte Suche verwenden.')
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=5)) as session:
+            async with session.get('http://supervisor/network/info',headers={'Authorization':'Bearer '+token},allow_redirects=False) as response:
+                require(response.status==200,'Netzerkennung nicht verfügbar. Runtime aktualisieren oder erweiterte Suche verwenden.')
+                body=await response.json()
+                require(body.get('result')=='ok','Home Assistant konnte die Netze nicht ermitteln.')
+                return supervisor_networks(body['data'])
+    except (ClientError,asyncio.TimeoutError,KeyError) as e:
+        raise ModbusError('Netzerkennung fehlgeschlagen. Bitte die erweiterte Suche verwenden.') from e
+
+AUTO_UNITS = [1,255,0]+list(range(2,248))
 
 TYPES = {'uint16':('>H',1), 'int16':('>h',1), 'uint32':('>I',2), 'int32':('>i',2), 'float32':('>f',2), 'uint64':('>Q',4), 'int64':('>q',4), 'float64':('>d',4), 'bool':('>H',1)}
 
@@ -71,7 +112,7 @@ class TCP:
                 pdu=await self.reader.readexactly(length-1)
                 if pdu[0]==fc|128:
                     require(len(pdu)==2)
-                    raise ModbusException('Modbus-Ausnahme '+str(pdu[1]))
+                    raise ModbusException(pdu[1])
                 require(pdu[0]==fc,'Unerwarteter Funktionscode.')
                 return pdu[1:]
             return await asyncio.wait_for(exchange(),2)
@@ -198,32 +239,59 @@ class ModbusService:
                     await asyncio.sleep(.05)
                 await asyncio.sleep(max(d['interval'],5 if failed else 0))
         finally:await client.close()
+    async def inspect_unit(self,host,port,unit):
+        c=TCP(host,port,unit)
+        identity={};responded=False;sun=None
+        try:
+            try: identity=await c.identify();responded=True
+            except ModbusException as e:
+                # Gateways report these when no downstream unit is reachable.
+                if e.code in (10,11): return None
+                responded=True
+            except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError): pass
+            if not responded:
+                try: await c.read(3,0,1);responded=True
+                except ModbusException as e: responded=e.code not in (10,11)
+                except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError): pass
+            if not responded: return None
+            try: sun=await sunspec(c)
+            except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError): pass
+            return dict(host=host,port=port,unit=unit,identity=identity,sunspec=sun)
+        finally: await c.close()
+
     async def run_scan(self,hosts,port,units):
+        # Bounded workers; units are sequential per host to protect small PLCs.
         sem=asyncio.Semaphore(4)
-        async def probe(host,unit):
+        async def probe(host):
             async with sem:
-                c=TCP(host,port,unit);identity={};sun=None;responded=False
+                writer=None
                 try:
-                    async def inspect():
-                        identity={};sun=None;responded=False
-                        # Reachability alone is not a Modbus identification.
-                        c.reader,c.writer=await asyncio.wait_for(asyncio.open_connection(host,port),1)
-                        try: identity=await c.identify();responded=True
-                        except ModbusException:responded=True
-                        except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError):pass
-                        try: sun=await sunspec(c);responded=responded or sun is not None
-                        except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError):pass
-                        if not responded:
-                            try: await c.read(3,0,1);responded=True
-                            except ModbusException:responded=True
-                            except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError):pass
-                        if responded:self.scan['devices'].append(dict(host=host,port=port,unit=unit,identity=identity,sunspec=sun))
-                    await asyncio.wait_for(inspect(),20)
-                except (OSError,asyncio.IncompleteReadError,asyncio.TimeoutError):pass
+                    _,writer=await asyncio.wait_for(asyncio.open_connection(host,port),1)
+                except (OSError,asyncio.TimeoutError):
+                    self.scan['completed']+=len(units);return
                 finally:
-                    await c.close();self.scan['completed']+=1
-        try:await asyncio.gather(*(probe(h,u) for h in hosts for u in units));self.scan['status']='complete'
-        except asyncio.CancelledError:self.scan['status']='cancelled';raise
+                    if writer:
+                        writer.close()
+                        with contextlib.suppress(Exception): await asyncio.wait_for(writer.wait_closed(),1)
+                for unit in units:
+                    try:
+                        result=await asyncio.wait_for(self.inspect_unit(host,port,unit),20)
+                        if result:self.scan['devices'].append(result)
+                    except (ModbusError,OSError,asyncio.IncompleteReadError,asyncio.TimeoutError): pass
+                    self.scan['completed']+=1
+                    await asyncio.sleep(.05)
+        workers=[asyncio.create_task(probe(h)) for h in hosts]
+        try:
+            await asyncio.gather(*workers)
+            self.scan['status']='complete'
+        except asyncio.CancelledError:
+            self.scan['status']='cancelled';raise
+        except Exception:
+            self.scan['status']='failed';self.scan['error']='Suche fehlgeschlagen. Bereits gefundene Geräte bleiben verfügbar.'
+        finally:
+            for task in workers:
+                if not task.done():task.cancel()
+            await asyncio.gather(*workers,return_exceptions=True)
     def routes(self,app):
         app.router.add_get('/api/v1/modbus',self.state)
         app.router.add_post('/api/v1/modbus/scan',self.begin_scan)
@@ -234,12 +302,23 @@ class ModbusService:
     async def state(self,r):return web.json_response(dict(devices=self.devices,profiles=self.profiles,points=self.points(),scan=self.scan))
     async def begin_scan(self,r):
         require(not self.scan_task or self.scan_task.done(),'Eine Suche läuft bereits.')
-        data=await r.json();network=ipaddress.ip_network(data['network'],strict=False)
-        require(network.version==4 and network.num_addresses<=256,'Maximal ein /24-Netz pro Suche.')
-        hosts=[local_host(str(h)) for h in network.hosts()];units=data.get('units',[1]);port=data.get('port',502)
-        require(integer(port,1,65535) and isinstance(units,list) and 1<=len(units)<=8 and all(integer(u,1,247) for u in units))
-        units=list(dict.fromkeys(units));require(len(hosts)*len(units)<=256,'Maximal 256 Kombinationen pro Suche.')
-        self.scan=dict(status='running',completed=0,total=len(hosts)*len(units),devices=[])
+        data=await r.json()
+        automatic=data.get('automatic',False)
+        require(type(automatic) is bool)
+        if automatic:
+            networks=await discover_networks()
+            # Net detection awaits IO; a second request may have started a scan.
+            require(not self.scan_task or self.scan_task.done(),'Eine Suche läuft bereits.')
+        else:
+            network=ipaddress.ip_network(data['network'],strict=False)
+            require(network.version==4 and network.num_addresses<=256,'Maximal ein /24-Netz pro manueller Suche.')
+            networks=[network]
+        hosts=list(dict.fromkeys(local_host(str(h)) for n in networks for h in n.hosts()))
+        units=data.get('units','auto' if automatic else [1]);port=data.get('port',502)
+        if units=='auto':units=AUTO_UNITS
+        require(integer(port,1,65535) and isinstance(units,list) and 1<=len(units)<=256 and all(integer(u,0,255) for u in units))
+        units=list(dict.fromkeys(units))
+        self.scan=dict(status='running',completed=0,total=len(hosts)*len(units),devices=[],networks=[str(n) for n in networks],unitCount=len(units))
         self.scan_task=asyncio.create_task(self.run_scan(hosts,port,units));return web.json_response(self.scan)
     async def cancel_scan(self,r):
         if self.scan_task and not self.scan_task.done():self.scan_task.cancel();await asyncio.gather(self.scan_task,return_exceptions=True)
@@ -248,7 +327,7 @@ class ModbusService:
         p=profile_checked(await r.json());require(len(self.profiles)<100 or any(x['id']==p['id'] for x in self.profiles))
         self.profiles=[x for x in self.profiles if x['id']!=p['id']]+[p];self.save('profiles',self.profiles);return web.json_response({'ok':True})
     async def add_device(self,r):
-        d=await r.json();d['host']=local_host(d['host']);require(integer(d.get('port'),1,65535) and integer(d.get('unit'),1,247))
+        d=await r.json();d['host']=local_host(d['host']);require(integer(d.get('port'),1,65535) and integer(d.get('unit'),0,255))
         require(isinstance(d.get('name'),str) and 0<len(d['name'])<=120 and integer(d.get('interval'),1,3600))
         p=profile_checked(d['profile']);require(len(self.devices)<32,'Maximal 32 Geräte.')
         require(not any((x['host'],x['port'],x['unit'])==(d['host'],d['port'],d['unit']) for x in self.devices),'Gerät bereits vorhanden.')

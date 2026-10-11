@@ -1,5 +1,5 @@
 name: Nodivra Runtime
-version: "0.16.0"
+version: "0.17.0"
 slug: nodivra_runtime
 description: Gemeinsame Runtime für Nodivra Automationen und eigene Dashboards.
 arch:
@@ -9,6 +9,8 @@ startup: application
 boot: auto
 init: false
 homeassistant_api: true
+hassio_api: true
+hassio_role: default
 ingress: true
 ingress_port: 8099
 ingress_entry: ""

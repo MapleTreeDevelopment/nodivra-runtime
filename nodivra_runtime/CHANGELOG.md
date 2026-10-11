@@ -1,3 +1,11 @@
+## 0.17.0
+
+- Ein-Klick-Suche: lokale private IPv4-Netze über Home Assistant erkennen; Modbus-Unit-IDs 1–247 sowie 0 und 255 automatisch prüfen.
+- Manuelle Suche weiterhin verfügbar; Fortschritt, erkannte Netze und Abbruch.
+- Gateway-Meldungen „Ziel nicht erreichbar“ gelten nicht als gefundenes Gerät.
+- Pro Host sequenzielle Leseanfragen, maximal vier Hosts gleichzeitig. Keine Schreibzugriffe.
+- Benötigt Mac-App 0.29.0 für die automatische Suche. Supervisor-Infozugriff mit Standardrolle zur Netzerkennung.
+
 ## 0.16.0
 
 - Lesende Modbus-TCP-Suche, Geräteidentifikation und SunSpec-Modellerkennung.
