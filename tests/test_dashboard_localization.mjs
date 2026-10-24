@@ -76,7 +76,10 @@ assert.equal(api.tr('{count} Messpunkte · {seconds} s · Min {min} / Max {max}'
 assert.equal(api.displayState({ binding: { entityID: 'binary_sensor.front_door' } }, { value: 'on', deviceClass: 'constructor' }), 'On');
 api.setLocale('unknown');
 assert.equal(api.uiLanguage(), 'de');
-for (const path of ['../server/dashboard_web/renderer.js', '../../Dashboards/server/dashboard_web/renderer.js']) {
+const serviceCopies = existsSync(nativeSource)
+  ? ['../server/dashboard_web/renderer.js', '../../Dashboards/server/dashboard_web/renderer.js']
+  : ['../nodivra_runtime/server/dashboard_web/renderer.js', '../nodivra_dashboards/server/dashboard_web/renderer.js'];
+for (const path of serviceCopies) {
   assert.equal(readFileSync(new URL(path, import.meta.url), 'utf8'), source, 'Packaged renderer matches the shared source');
 }
 console.log(`Dashboard localization: ${keys.length} messages, six languages, state/weather/format/default checks passed.`);
