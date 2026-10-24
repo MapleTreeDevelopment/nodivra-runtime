@@ -7,6 +7,719 @@
   let cameraTimer=null; const reduceMotion=matchMedia("(prefers-reduced-motion: reduce)");
   const visibility=new IntersectionObserver(entries=>{for(const e of entries)e.target.classList.toggle('motion-paused',!e.isIntersecting);});
   document.addEventListener('visibilitychange',()=>document.documentElement.classList.toggle('document-hidden',document.hidden));
+  // UI language is supplied by the native preview, never inferred from entity values or authored text.
+  // Existing published dashboards retain German when no UI locale is supplied.
+  const uiTranslations={
+    "de": {},
+    "en": {
+      "Zustandssymbol: {name}": "State icon: {name}",
+      "Zustand unbekannt": "State unknown",
+      "Dashboard-Seiten": "Dashboard pages",
+      "Seiten": "Pages",
+      "Füge links deine erste Komponente hinzu.": "Add your first component from the left.",
+      "Diese Seite enthält noch keine Inhalte.": "This page has no content yet.",
+      "Bild auswählen": "Choose image",
+      "Livebild pausieren": "Pause live view",
+      "Liveverlauf": "Live history",
+      "Liveverlauf seit dem Öffnen": "Live history since opening",
+      "Aktivieren": "Activate",
+      "Zieltemperatur": "Target temperature",
+      "Helligkeit": "Brightness",
+      "Größe ändern": "Resize",
+      "Gestaltungsvorschau · Werte nur lesend": "Design preview · Read-only values",
+      "Verbindung wird geprüft …": "Checking connection …",
+      "Inhalt verschieben": "Move content",
+      "Wert nicht verfügbar": "Value unavailable",
+      "Vorschau · Einzelbilder": "Preview · Still images",
+      "Livebilder · alle 2 Sekunden": "Live images · Every 2 seconds",
+      "Live · MJPEG": "Live · MJPEG",
+      "Livebild wird geladen …": "Loading live view …",
+      "Kamera nicht verfügbar": "Camera unavailable",
+      "Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen": "Live view unavailable · Check camera or still-image mode",
+      "Wetter nicht verfügbar": "Weather unavailable",
+      "Einheit fehlt": "Unit missing",
+      "Luftfeuchtigkeit": "Humidity",
+      "Wind": "Wind",
+      "Warte auf Zahlenwerte · unbekannte Werte sind Lücken": "Waiting for numeric values · Unknown values appear as gaps",
+      "{count} Messpunkte · {seconds} s · Min {min} / Max {max}": "{count} samples · {seconds} s · Min {min} / Max {max}",
+      "Minimum {min}, Maximum {max}": "Minimum {min}, maximum {max}",
+      "Livebild fortsetzen": "Resume live view",
+      "Anfrage nicht bestätigt.": "Request not confirmed.",
+      "Aufruf wird gesendet …": "Sending request …",
+      "Antwort ausstehend. Gerätezustand prüfen; nicht automatisch wiederholt.": "Response pending. Check the device state; not retried automatically.",
+      "Home Assistant nicht verbunden": "Home Assistant disconnected",
+      "Verbindung unterbrochen · Bedienung pausiert": "Connection lost · Controls paused",
+      "Dashboards": "Dashboards",
+      "Dein Zuhause. So wie du es gestaltet hast.": "Your home. Just as you designed it.",
+      "{count} Seiten": "{count} pages",
+      "Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.": "No dashboard published yet. Create your first dashboard in the Nodivra Mac app.",
+      "Entität nicht verfügbar": "Entity unavailable",
+      "Ein": "On",
+      "Aus": "Off",
+      "Klare Nacht": "Clear night",
+      "Bewölkt": "Cloudy",
+      "Außergewöhnliches Wetter": "Exceptional weather",
+      "Nebel": "Fog",
+      "Hagel": "Hail",
+      "Gewitter": "Thunderstorm",
+      "Gewitter mit Regen": "Thunderstorms with rain",
+      "Teilweise bewölkt": "Partly cloudy",
+      "Starkregen": "Heavy rain",
+      "Regen": "Rain",
+      "Schnee": "Snow",
+      "Schneeregen": "Sleet",
+      "Sonnig": "Sunny",
+      "Windig": "Windy",
+      "Windig und bewölkt": "Windy and cloudy",
+      "Offen": "Open",
+      "Geschlossen": "Closed",
+      "Entriegelt": "Unlocked",
+      "Verriegelt": "Locked",
+      "Bewegung": "Motion",
+      "Keine Bewegung": "No motion",
+      "Belegt": "Occupied",
+      "Frei": "Unoccupied",
+      "Anwesend": "Present",
+      "Abwesend": "Away",
+      "Nass": "Wet",
+      "Trocken": "Dry",
+      "Rauch erkannt": "Smoke detected",
+      "Kein Rauch": "No smoke",
+      "Gas erkannt": "Gas detected",
+      "Kein Gas": "No gas",
+      "CO erkannt": "CO detected",
+      "Kein CO": "No CO",
+      "Batterie niedrig": "Low battery",
+      "Batterie normal": "Battery normal",
+      "Lädt": "Charging",
+      "Lädt nicht": "Not charging",
+      "Verbunden": "Connected",
+      "Getrennt": "Disconnected",
+      "Problem": "Problem",
+      "In Ordnung": "OK",
+      "Unsicher": "Unsafe",
+      "Sicher": "Safe",
+      "Kalt": "Cold",
+      "Normal": "Normal",
+      "Heiß": "Hot",
+      "Glasbruch erkannt": "Glass break detected",
+      "Kein Glasbruch": "No glass break",
+      "Licht erkannt": "Light detected",
+      "Kein Licht": "No light",
+      "Bewegt sich": "Moving",
+      "Ruht": "Idle",
+      "Eingesteckt": "Plugged in",
+      "Ausgesteckt": "Unplugged",
+      "Strom erkannt": "Power detected",
+      "Kein Strom": "No power",
+      "Läuft": "Running",
+      "Geräusch erkannt": "Sound detected",
+      "Kein Geräusch": "No sound",
+      "Manipulation erkannt": "Tampering detected",
+      "Keine Manipulation": "No tampering",
+      "Update verfügbar": "Update available",
+      "Aktuell": "Up to date",
+      "Vibration erkannt": "Vibration detected",
+      "Keine Vibration": "No vibration",
+      "Öffnet": "Opening",
+      "Schließt": "Closing",
+      "Verriegelt …": "Locking …",
+      "Entriegelt …": "Unlocking …",
+      "Blockiert": "Jammed",
+      "Zuhause": "Home",
+      "Wiedergabe": "Playing",
+      "Pausiert": "Paused",
+      "Bereit": "Ready",
+      "Bereitschaft": "Standby",
+      "Reinigt": "Cleaning",
+      "In Station": "Docked",
+      "Kehrt zurück": "Returning",
+      "Deaktiviert": "Disarmed",
+      "Zuhause gesichert": "Armed at home",
+      "Abwesend gesichert": "Armed away",
+      "Alarm": "Alarm",
+      "Heizen": "Heating",
+      "Kühlen": "Cooling",
+      "Automatisch": "Automatic",
+      "Entfeuchten": "Dehumidifying",
+      "Lüften": "Fan only",
+      "Über Horizont": "Above the horizon",
+      "Unter Horizont": "Below the horizon",
+      "Kamerabild nicht verfügbar": "Camera image unavailable",
+      "Bereich leer oder Leuchten nicht verfügbar": "Area empty or lights unavailable",
+      "Geschütztes Attribut": "Protected attribute",
+      "Entität nicht gefunden": "Entity not found",
+      "Automation nicht aktiv oder Wert veraltet": "Automation inactive or value outdated",
+      "Strukturierte Daten benötigen eine eigene Karte": "Structured data needs a dedicated card"
+    },
+    "es": {
+      "Zustandssymbol: {name}": "Icono de estado: {name}",
+      "Zustand unbekannt": "Estado desconocido",
+      "Dashboard-Seiten": "Páginas del panel",
+      "Seiten": "Páginas",
+      "Füge links deine erste Komponente hinzu.": "Añade tu primer componente desde la izquierda.",
+      "Diese Seite enthält noch keine Inhalte.": "Esta página aún no tiene contenido.",
+      "Bild auswählen": "Elegir imagen",
+      "Livebild pausieren": "Pausar imagen en directo",
+      "Liveverlauf": "Historial en directo",
+      "Liveverlauf seit dem Öffnen": "Historial en directo desde la apertura",
+      "Aktivieren": "Activar",
+      "Zieltemperatur": "Temperatura objetivo",
+      "Helligkeit": "Brillo",
+      "Größe ändern": "Cambiar tamaño",
+      "Gestaltungsvorschau · Werte nur lesend": "Vista previa del diseño · Valores de solo lectura",
+      "Verbindung wird geprüft …": "Comprobando conexión …",
+      "Inhalt verschieben": "Mover contenido",
+      "Wert nicht verfügbar": "Valor no disponible",
+      "Vorschau · Einzelbilder": "Vista previa · Imágenes fijas",
+      "Livebilder · alle 2 Sekunden": "Imágenes en directo · Cada 2 segundos",
+      "Live · MJPEG": "En directo · MJPEG",
+      "Livebild wird geladen …": "Cargando imagen en directo …",
+      "Kamera nicht verfügbar": "Cámara no disponible",
+      "Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen": "Imagen en directo no disponible · Revisa la cámara o el modo de imágenes fijas",
+      "Wetter nicht verfügbar": "Tiempo no disponible",
+      "Einheit fehlt": "Falta la unidad",
+      "Luftfeuchtigkeit": "Humedad",
+      "Wind": "Viento",
+      "Warte auf Zahlenwerte · unbekannte Werte sind Lücken": "Esperando valores numéricos · Los valores desconocidos aparecen como huecos",
+      "{count} Messpunkte · {seconds} s · Min {min} / Max {max}": "{count} muestras · {seconds} s · Mín. {min} / Máx. {max}",
+      "Minimum {min}, Maximum {max}": "Mínimo {min}, máximo {max}",
+      "Livebild fortsetzen": "Reanudar imagen en directo",
+      "Anfrage nicht bestätigt.": "Solicitud no confirmada.",
+      "Aufruf wird gesendet …": "Enviando solicitud …",
+      "Antwort ausstehend. Gerätezustand prüfen; nicht automatisch wiederholt.": "Respuesta pendiente. Revisa el estado del dispositivo; no se ha reintentado automáticamente.",
+      "Home Assistant nicht verbunden": "Home Assistant desconectado",
+      "Verbindung unterbrochen · Bedienung pausiert": "Conexión interrumpida · Controles en pausa",
+      "Dashboards": "Dashboards",
+      "Dein Zuhause. So wie du es gestaltet hast.": "Tu hogar. Tal como lo has diseñado.",
+      "{count} Seiten": "{count} páginas",
+      "Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.": "Aún no hay ningún panel publicado. Crea tu primer panel en la app Nodivra para Mac.",
+      "Entität nicht verfügbar": "Entidad no disponible",
+      "Ein": "Encendido",
+      "Aus": "Apagado",
+      "Klare Nacht": "Noche despejada",
+      "Bewölkt": "Nublado",
+      "Außergewöhnliches Wetter": "Tiempo excepcional",
+      "Nebel": "Niebla",
+      "Hagel": "Granizo",
+      "Gewitter": "Tormenta",
+      "Gewitter mit Regen": "Tormenta con lluvia",
+      "Teilweise bewölkt": "Parcialmente nublado",
+      "Starkregen": "Lluvia intensa",
+      "Regen": "Lluvia",
+      "Schnee": "Nieve",
+      "Schneeregen": "Aguanieve",
+      "Sonnig": "Soleado",
+      "Windig": "Ventoso",
+      "Windig und bewölkt": "Ventoso y nublado",
+      "Offen": "Abierto",
+      "Geschlossen": "Cerrado",
+      "Entriegelt": "Desbloqueado",
+      "Verriegelt": "Bloqueado",
+      "Bewegung": "Movimiento",
+      "Keine Bewegung": "Sin movimiento",
+      "Belegt": "Ocupado",
+      "Frei": "Desocupado",
+      "Anwesend": "Presente",
+      "Abwesend": "Ausente",
+      "Nass": "Mojado",
+      "Trocken": "Seco",
+      "Rauch erkannt": "Humo detectado",
+      "Kein Rauch": "Sin humo",
+      "Gas erkannt": "Gas detectado",
+      "Kein Gas": "Sin gas",
+      "CO erkannt": "CO detectado",
+      "Kein CO": "Sin CO",
+      "Batterie niedrig": "Batería baja",
+      "Batterie normal": "Batería normal",
+      "Lädt": "Cargando",
+      "Lädt nicht": "No está cargando",
+      "Verbunden": "Conectado",
+      "Getrennt": "Desconectado",
+      "Problem": "Problema",
+      "In Ordnung": "Correcto",
+      "Unsicher": "Inseguro",
+      "Sicher": "Seguro",
+      "Kalt": "Frío",
+      "Normal": "Normal",
+      "Heiß": "Caliente",
+      "Glasbruch erkannt": "Rotura de cristal detectada",
+      "Kein Glasbruch": "Sin rotura de cristal",
+      "Licht erkannt": "Luz detectada",
+      "Kein Licht": "Sin luz",
+      "Bewegt sich": "En movimiento",
+      "Ruht": "En reposo",
+      "Eingesteckt": "Enchufado",
+      "Ausgesteckt": "Desenchufado",
+      "Strom erkannt": "Corriente detectada",
+      "Kein Strom": "Sin corriente",
+      "Läuft": "En funcionamiento",
+      "Geräusch erkannt": "Sonido detectado",
+      "Kein Geräusch": "Sin sonido",
+      "Manipulation erkannt": "Manipulación detectada",
+      "Keine Manipulation": "Sin manipulación",
+      "Update verfügbar": "Actualización disponible",
+      "Aktuell": "Actualizado",
+      "Vibration erkannt": "Vibración detectada",
+      "Keine Vibration": "Sin vibración",
+      "Öffnet": "Abriendo",
+      "Schließt": "Cerrando",
+      "Verriegelt …": "Bloqueando …",
+      "Entriegelt …": "Desbloqueando …",
+      "Blockiert": "Atascado",
+      "Zuhause": "Hogar",
+      "Wiedergabe": "Reproduciendo",
+      "Pausiert": "Pausado",
+      "Bereit": "Listo",
+      "Bereitschaft": "En espera",
+      "Reinigt": "Limpiando",
+      "In Station": "En la base",
+      "Kehrt zurück": "Volviendo",
+      "Deaktiviert": "Desarmado",
+      "Zuhause gesichert": "Armado en casa",
+      "Abwesend gesichert": "Armado fuera de casa",
+      "Alarm": "Alarma",
+      "Heizen": "Calefacción",
+      "Kühlen": "Refrigeración",
+      "Automatisch": "Automático",
+      "Entfeuchten": "Deshumidificación",
+      "Lüften": "Solo ventilación",
+      "Über Horizont": "Sobre el horizonte",
+      "Unter Horizont": "Bajo el horizonte",
+      "Kamerabild nicht verfügbar": "Imagen de cámara no disponible",
+      "Bereich leer oder Leuchten nicht verfügbar": "Área vacía o luces no disponibles",
+      "Geschütztes Attribut": "Atributo protegido",
+      "Entität nicht gefunden": "Entidad no encontrada",
+      "Automation nicht aktiv oder Wert veraltet": "Automatización inactiva o valor desactualizado",
+      "Strukturierte Daten benötigen eine eigene Karte": "Los datos estructurados necesitan una tarjeta específica"
+    },
+    "fr": {
+      "Zustandssymbol: {name}": "Icône d’état : {name}",
+      "Zustand unbekannt": "État inconnu",
+      "Dashboard-Seiten": "Pages du tableau de bord",
+      "Seiten": "Pages",
+      "Füge links deine erste Komponente hinzu.": "Ajoutez votre premier composant depuis la gauche.",
+      "Diese Seite enthält noch keine Inhalte.": "Cette page n’a pas encore de contenu.",
+      "Bild auswählen": "Choisir une image",
+      "Livebild pausieren": "Mettre le direct en pause",
+      "Liveverlauf": "Historique en direct",
+      "Liveverlauf seit dem Öffnen": "Historique en direct depuis l’ouverture",
+      "Aktivieren": "Activer",
+      "Zieltemperatur": "Température cible",
+      "Helligkeit": "Luminosité",
+      "Größe ändern": "Redimensionner",
+      "Gestaltungsvorschau · Werte nur lesend": "Aperçu du design · Valeurs en lecture seule",
+      "Verbindung wird geprüft …": "Vérification de la connexion…",
+      "Inhalt verschieben": "Déplacer le contenu",
+      "Wert nicht verfügbar": "Valeur indisponible",
+      "Vorschau · Einzelbilder": "Aperçu · Images fixes",
+      "Livebilder · alle 2 Sekunden": "Images en direct · Toutes les 2 secondes",
+      "Live · MJPEG": "Direct · MJPEG",
+      "Livebild wird geladen …": "Chargement du direct…",
+      "Kamera nicht verfügbar": "Caméra indisponible",
+      "Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen": "Direct indisponible · Vérifiez la caméra ou le mode images fixes",
+      "Wetter nicht verfügbar": "Météo indisponible",
+      "Einheit fehlt": "Unité manquante",
+      "Luftfeuchtigkeit": "Humidité",
+      "Wind": "Vent",
+      "Warte auf Zahlenwerte · unbekannte Werte sind Lücken": "En attente de valeurs numériques · Les valeurs inconnues créent des interruptions",
+      "{count} Messpunkte · {seconds} s · Min {min} / Max {max}": "{count} mesures · {seconds} s · Min. {min} / Max. {max}",
+      "Minimum {min}, Maximum {max}": "Minimum {min}, maximum {max}",
+      "Livebild fortsetzen": "Reprendre le direct",
+      "Anfrage nicht bestätigt.": "Demande non confirmée.",
+      "Aufruf wird gesendet …": "Envoi de la demande…",
+      "Antwort ausstehend. Gerätezustand prüfen; nicht automatisch wiederholt.": "Réponse en attente. Vérifiez l’état de l’appareil ; aucun nouvel essai automatique.",
+      "Home Assistant nicht verbunden": "Home Assistant déconnecté",
+      "Verbindung unterbrochen · Bedienung pausiert": "Connexion interrompue · Commandes suspendues",
+      "Dashboards": "Dashboards",
+      "Dein Zuhause. So wie du es gestaltet hast.": "Votre maison. Telle que vous l’avez conçue.",
+      "{count} Seiten": "{count} pages",
+      "Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.": "Aucun tableau de bord publié. Créez votre premier tableau de bord dans l’app Nodivra pour Mac.",
+      "Entität nicht verfügbar": "Entité indisponible",
+      "Ein": "Marche",
+      "Aus": "Arrêt",
+      "Klare Nacht": "Nuit claire",
+      "Bewölkt": "Nuageux",
+      "Außergewöhnliches Wetter": "Météo exceptionnelle",
+      "Nebel": "Brouillard",
+      "Hagel": "Grêle",
+      "Gewitter": "Orage",
+      "Gewitter mit Regen": "Orages avec pluie",
+      "Teilweise bewölkt": "Partiellement nuageux",
+      "Starkregen": "Fortes pluies",
+      "Regen": "Pluie",
+      "Schnee": "Neige",
+      "Schneeregen": "Pluie et neige",
+      "Sonnig": "Ensoleillé",
+      "Windig": "Venteux",
+      "Windig und bewölkt": "Venteux et nuageux",
+      "Offen": "Ouvert",
+      "Geschlossen": "Fermé",
+      "Entriegelt": "Déverrouillé",
+      "Verriegelt": "Verrouillé",
+      "Bewegung": "Mouvement",
+      "Keine Bewegung": "Aucun mouvement",
+      "Belegt": "Occupé",
+      "Frei": "Inoccupé",
+      "Anwesend": "Présent",
+      "Abwesend": "Absent",
+      "Nass": "Humide",
+      "Trocken": "Sec",
+      "Rauch erkannt": "Fumée détectée",
+      "Kein Rauch": "Aucune fumée",
+      "Gas erkannt": "Gaz détecté",
+      "Kein Gas": "Aucun gaz",
+      "CO erkannt": "CO détecté",
+      "Kein CO": "Aucun CO",
+      "Batterie niedrig": "Batterie faible",
+      "Batterie normal": "Batterie normale",
+      "Lädt": "En charge",
+      "Lädt nicht": "Pas en charge",
+      "Verbunden": "Connecté",
+      "Getrennt": "Déconnecté",
+      "Problem": "Problème",
+      "In Ordnung": "Normal",
+      "Unsicher": "Dangereux",
+      "Sicher": "Sûr",
+      "Kalt": "Froid",
+      "Normal": "Normal",
+      "Heiß": "Chaud",
+      "Glasbruch erkannt": "Bris de verre détecté",
+      "Kein Glasbruch": "Aucun bris de verre",
+      "Licht erkannt": "Lumière détectée",
+      "Kein Licht": "Aucune lumière",
+      "Bewegt sich": "En mouvement",
+      "Ruht": "Au repos",
+      "Eingesteckt": "Branché",
+      "Ausgesteckt": "Débranché",
+      "Strom erkannt": "Courant détecté",
+      "Kein Strom": "Aucun courant",
+      "Läuft": "En marche",
+      "Geräusch erkannt": "Son détecté",
+      "Kein Geräusch": "Aucun son",
+      "Manipulation erkannt": "Sabotage détecté",
+      "Keine Manipulation": "Aucun sabotage",
+      "Update verfügbar": "Mise à jour disponible",
+      "Aktuell": "À jour",
+      "Vibration erkannt": "Vibration détectée",
+      "Keine Vibration": "Aucune vibration",
+      "Öffnet": "Ouverture",
+      "Schließt": "Fermeture",
+      "Verriegelt …": "Verrouillage…",
+      "Entriegelt …": "Déverrouillage…",
+      "Blockiert": "Bloqué",
+      "Zuhause": "Maison",
+      "Wiedergabe": "Lecture",
+      "Pausiert": "En pause",
+      "Bereit": "Prêt",
+      "Bereitschaft": "Veille",
+      "Reinigt": "Nettoyage",
+      "In Station": "Sur la station",
+      "Kehrt zurück": "Retour",
+      "Deaktiviert": "Désarmé",
+      "Zuhause gesichert": "Armé à domicile",
+      "Abwesend gesichert": "Armé en absence",
+      "Alarm": "Alarme",
+      "Heizen": "Chauffage",
+      "Kühlen": "Refroidissement",
+      "Automatisch": "Automatique",
+      "Entfeuchten": "Déshumidification",
+      "Lüften": "Ventilation seule",
+      "Über Horizont": "Au-dessus de l’horizon",
+      "Unter Horizont": "Sous l’horizon",
+      "Kamerabild nicht verfügbar": "Image de la caméra indisponible",
+      "Bereich leer oder Leuchten nicht verfügbar": "Zone vide ou lumières indisponibles",
+      "Geschütztes Attribut": "Attribut protégé",
+      "Entität nicht gefunden": "Entité introuvable",
+      "Automation nicht aktiv oder Wert veraltet": "Automatisation inactive ou valeur obsolète",
+      "Strukturierte Daten benötigen eine eigene Karte": "Les données structurées nécessitent une carte dédiée"
+    },
+    "it": {
+      "Zustandssymbol: {name}": "Icona di stato: {name}",
+      "Zustand unbekannt": "Stato sconosciuto",
+      "Dashboard-Seiten": "Pagine della dashboard",
+      "Seiten": "Pagine",
+      "Füge links deine erste Komponente hinzu.": "Aggiungi il primo componente dalla barra a sinistra.",
+      "Diese Seite enthält noch keine Inhalte.": "Questa pagina non ha ancora contenuti.",
+      "Bild auswählen": "Scegli immagine",
+      "Livebild pausieren": "Pausa vista dal vivo",
+      "Liveverlauf": "Cronologia dal vivo",
+      "Liveverlauf seit dem Öffnen": "Cronologia dal vivo dall’apertura",
+      "Aktivieren": "Attiva",
+      "Zieltemperatur": "Temperatura desiderata",
+      "Helligkeit": "Luminosità",
+      "Größe ändern": "Ridimensiona",
+      "Gestaltungsvorschau · Werte nur lesend": "Anteprima del design · Valori in sola lettura",
+      "Verbindung wird geprüft …": "Verifica della connessione…",
+      "Inhalt verschieben": "Sposta contenuto",
+      "Wert nicht verfügbar": "Valore non disponibile",
+      "Vorschau · Einzelbilder": "Anteprima · Immagini statiche",
+      "Livebilder · alle 2 Sekunden": "Immagini dal vivo · Ogni 2 secondi",
+      "Live · MJPEG": "Dal vivo · MJPEG",
+      "Livebild wird geladen …": "Caricamento della vista dal vivo…",
+      "Kamera nicht verfügbar": "Telecamera non disponibile",
+      "Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen": "Vista dal vivo non disponibile · Verifica la telecamera o la modalità immagini statiche",
+      "Wetter nicht verfügbar": "Meteo non disponibile",
+      "Einheit fehlt": "Unità mancante",
+      "Luftfeuchtigkeit": "Umidità",
+      "Wind": "Vento",
+      "Warte auf Zahlenwerte · unbekannte Werte sind Lücken": "In attesa di valori numerici · I valori sconosciuti appaiono come interruzioni",
+      "{count} Messpunkte · {seconds} s · Min {min} / Max {max}": "{count} campioni · {seconds} s · Min. {min} / Max. {max}",
+      "Minimum {min}, Maximum {max}": "Minimo {min}, massimo {max}",
+      "Livebild fortsetzen": "Riprendi vista dal vivo",
+      "Anfrage nicht bestätigt.": "Richiesta non confermata.",
+      "Aufruf wird gesendet …": "Invio della richiesta…",
+      "Antwort ausstehend. Gerätezustand prüfen; nicht automatisch wiederholt.": "Risposta in attesa. Verifica lo stato del dispositivo; nessun nuovo tentativo automatico.",
+      "Home Assistant nicht verbunden": "Home Assistant disconnesso",
+      "Verbindung unterbrochen · Bedienung pausiert": "Connessione interrotta · Controlli sospesi",
+      "Dashboards": "Dashboard",
+      "Dein Zuhause. So wie du es gestaltet hast.": "La tua casa. Come l’hai progettata.",
+      "{count} Seiten": "{count} pagine",
+      "Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.": "Nessuna dashboard pubblicata. Crea la tua prima dashboard nell’app Nodivra per Mac.",
+      "Entität nicht verfügbar": "Entità non disponibile",
+      "Ein": "On",
+      "Aus": "Off",
+      "Klare Nacht": "Notte serena",
+      "Bewölkt": "Nuvoloso",
+      "Außergewöhnliches Wetter": "Meteo eccezionale",
+      "Nebel": "Nebbia",
+      "Hagel": "Grandine",
+      "Gewitter": "Temporale",
+      "Gewitter mit Regen": "Temporali con pioggia",
+      "Teilweise bewölkt": "Parzialmente nuvoloso",
+      "Starkregen": "Pioggia intensa",
+      "Regen": "Pioggia",
+      "Schnee": "Neve",
+      "Schneeregen": "Nevischio",
+      "Sonnig": "Soleggiato",
+      "Windig": "Ventoso",
+      "Windig und bewölkt": "Ventoso e nuvoloso",
+      "Offen": "Aperto",
+      "Geschlossen": "Chiuso",
+      "Entriegelt": "Sbloccato",
+      "Verriegelt": "Bloccato",
+      "Bewegung": "Movimento",
+      "Keine Bewegung": "Nessun movimento",
+      "Belegt": "Occupato",
+      "Frei": "Libero",
+      "Anwesend": "Presente",
+      "Abwesend": "Fuori casa",
+      "Nass": "Bagnato",
+      "Trocken": "Asciutto",
+      "Rauch erkannt": "Fumo rilevato",
+      "Kein Rauch": "Nessun fumo",
+      "Gas erkannt": "Gas rilevato",
+      "Kein Gas": "Nessun gas",
+      "CO erkannt": "CO rilevato",
+      "Kein CO": "Nessun CO",
+      "Batterie niedrig": "Batteria scarica",
+      "Batterie normal": "Batteria normale",
+      "Lädt": "In carica",
+      "Lädt nicht": "Non in carica",
+      "Verbunden": "Connesso",
+      "Getrennt": "Disconnesso",
+      "Problem": "Problema",
+      "In Ordnung": "Regolare",
+      "Unsicher": "Non sicuro",
+      "Sicher": "Sicuro",
+      "Kalt": "Freddo",
+      "Normal": "Normale",
+      "Heiß": "Caldo",
+      "Glasbruch erkannt": "Rottura del vetro rilevata",
+      "Kein Glasbruch": "Nessuna rottura del vetro",
+      "Licht erkannt": "Luce rilevata",
+      "Kein Licht": "Nessuna luce",
+      "Bewegt sich": "In movimento",
+      "Ruht": "Fermo",
+      "Eingesteckt": "Collegato",
+      "Ausgesteckt": "Scollegato",
+      "Strom erkannt": "Corrente rilevata",
+      "Kein Strom": "Nessuna corrente",
+      "Läuft": "In funzione",
+      "Geräusch erkannt": "Suono rilevato",
+      "Kein Geräusch": "Nessun suono",
+      "Manipulation erkannt": "Manomissione rilevata",
+      "Keine Manipulation": "Nessuna manomissione",
+      "Update verfügbar": "Aggiornamento disponibile",
+      "Aktuell": "Aggiornato",
+      "Vibration erkannt": "Vibrazione rilevata",
+      "Keine Vibration": "Nessuna vibrazione",
+      "Öffnet": "Apertura",
+      "Schließt": "Chiusura",
+      "Verriegelt …": "Blocco…",
+      "Entriegelt …": "Sblocco…",
+      "Blockiert": "Inceppato",
+      "Zuhause": "Casa",
+      "Wiedergabe": "In riproduzione",
+      "Pausiert": "In pausa",
+      "Bereit": "Pronto",
+      "Bereitschaft": "Standby",
+      "Reinigt": "Pulizia",
+      "In Station": "Alla base",
+      "Kehrt zurück": "Rientro",
+      "Deaktiviert": "Disinserito",
+      "Zuhause gesichert": "Inserito in casa",
+      "Abwesend gesichert": "Inserito fuori casa",
+      "Alarm": "Allarme",
+      "Heizen": "Riscaldamento",
+      "Kühlen": "Raffrescamento",
+      "Automatisch": "Automatico",
+      "Entfeuchten": "Deumidificazione",
+      "Lüften": "Solo ventilazione",
+      "Über Horizont": "Sopra l’orizzonte",
+      "Unter Horizont": "Sotto l’orizzonte",
+      "Kamerabild nicht verfügbar": "Immagine della telecamera non disponibile",
+      "Bereich leer oder Leuchten nicht verfügbar": "Area vuota o luci non disponibili",
+      "Geschütztes Attribut": "Attributo protetto",
+      "Entität nicht gefunden": "Entità non trovata",
+      "Automation nicht aktiv oder Wert veraltet": "Automazione inattiva o valore non aggiornato",
+      "Strukturierte Daten benötigen eine eigene Karte": "I dati strutturati richiedono una scheda dedicata"
+    },
+    "pt-BR": {
+      "Zustandssymbol: {name}": "Ícone de estado: {name}",
+      "Zustand unbekannt": "Estado desconhecido",
+      "Dashboard-Seiten": "Páginas do painel",
+      "Seiten": "Páginas",
+      "Füge links deine erste Komponente hinzu.": "Adicione seu primeiro componente pela barra à esquerda.",
+      "Diese Seite enthält noch keine Inhalte.": "Esta página ainda não tem conteúdo.",
+      "Bild auswählen": "Escolher imagem",
+      "Livebild pausieren": "Pausar imagem ao vivo",
+      "Liveverlauf": "Histórico ao vivo",
+      "Liveverlauf seit dem Öffnen": "Histórico ao vivo desde a abertura",
+      "Aktivieren": "Ativar",
+      "Zieltemperatur": "Temperatura desejada",
+      "Helligkeit": "Brilho",
+      "Größe ändern": "Redimensionar",
+      "Gestaltungsvorschau · Werte nur lesend": "Prévia do design · Valores somente para leitura",
+      "Verbindung wird geprüft …": "Verificando conexão…",
+      "Inhalt verschieben": "Mover conteúdo",
+      "Wert nicht verfügbar": "Valor indisponível",
+      "Vorschau · Einzelbilder": "Prévia · Imagens estáticas",
+      "Livebilder · alle 2 Sekunden": "Imagens ao vivo · A cada 2 segundos",
+      "Live · MJPEG": "Ao vivo · MJPEG",
+      "Livebild wird geladen …": "Carregando imagem ao vivo…",
+      "Kamera nicht verfügbar": "Câmera indisponível",
+      "Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen": "Imagem ao vivo indisponível · Verifique a câmera ou o modo de imagens estáticas",
+      "Wetter nicht verfügbar": "Clima indisponível",
+      "Einheit fehlt": "Unidade ausente",
+      "Luftfeuchtigkeit": "Umidade",
+      "Wind": "Vento",
+      "Warte auf Zahlenwerte · unbekannte Werte sind Lücken": "Aguardando valores numéricos · Valores desconhecidos aparecem como lacunas",
+      "{count} Messpunkte · {seconds} s · Min {min} / Max {max}": "{count} amostras · {seconds} s · Mín. {min} / Máx. {max}",
+      "Minimum {min}, Maximum {max}": "Mínimo {min}, máximo {max}",
+      "Livebild fortsetzen": "Retomar imagem ao vivo",
+      "Anfrage nicht bestätigt.": "Solicitação não confirmada.",
+      "Aufruf wird gesendet …": "Enviando solicitação…",
+      "Antwort ausstehend. Gerätezustand prüfen; nicht automatisch wiederholt.": "Resposta pendente. Verifique o estado do dispositivo; nenhuma nova tentativa automática.",
+      "Home Assistant nicht verbunden": "Home Assistant desconectado",
+      "Verbindung unterbrochen · Bedienung pausiert": "Conexão interrompida · Controles pausados",
+      "Dashboards": "Painéis",
+      "Dein Zuhause. So wie du es gestaltet hast.": "Sua casa. Do jeito que você criou.",
+      "{count} Seiten": "{count} páginas",
+      "Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.": "Nenhum painel publicado ainda. Crie seu primeiro painel no app Nodivra para Mac.",
+      "Entität nicht verfügbar": "Entidade indisponível",
+      "Ein": "Ligado",
+      "Aus": "Desligado",
+      "Klare Nacht": "Noite de céu limpo",
+      "Bewölkt": "Nublado",
+      "Außergewöhnliches Wetter": "Condição climática excepcional",
+      "Nebel": "Névoa",
+      "Hagel": "Granizo",
+      "Gewitter": "Tempestade",
+      "Gewitter mit Regen": "Trovoadas com chuva",
+      "Teilweise bewölkt": "Parcialmente nublado",
+      "Starkregen": "Chuva forte",
+      "Regen": "Chuva",
+      "Schnee": "Neve",
+      "Schneeregen": "Chuva e neve",
+      "Sonnig": "Ensolarado",
+      "Windig": "Ventando",
+      "Windig und bewölkt": "Ventando e nublado",
+      "Offen": "Aberto",
+      "Geschlossen": "Fechado",
+      "Entriegelt": "Destrancado",
+      "Verriegelt": "Trancado",
+      "Bewegung": "Movimento",
+      "Keine Bewegung": "Sem movimento",
+      "Belegt": "Ocupado",
+      "Frei": "Desocupado",
+      "Anwesend": "Presente",
+      "Abwesend": "Fora de casa",
+      "Nass": "Molhado",
+      "Trocken": "Seco",
+      "Rauch erkannt": "Fumaça detectada",
+      "Kein Rauch": "Sem fumaça",
+      "Gas erkannt": "Gás detectado",
+      "Kein Gas": "Sem gás",
+      "CO erkannt": "CO detectado",
+      "Kein CO": "Sem CO",
+      "Batterie niedrig": "Bateria fraca",
+      "Batterie normal": "Bateria normal",
+      "Lädt": "Carregando",
+      "Lädt nicht": "Não está carregando",
+      "Verbunden": "Conectado",
+      "Getrennt": "Desconectado",
+      "Problem": "Problema",
+      "In Ordnung": "Tudo certo",
+      "Unsicher": "Inseguro",
+      "Sicher": "Seguro",
+      "Kalt": "Frio",
+      "Normal": "Normal",
+      "Heiß": "Quente",
+      "Glasbruch erkannt": "Quebra de vidro detectada",
+      "Kein Glasbruch": "Sem quebra de vidro",
+      "Licht erkannt": "Luz detectada",
+      "Kein Licht": "Sem luz",
+      "Bewegt sich": "Em movimento",
+      "Ruht": "Em repouso",
+      "Eingesteckt": "Conectado à tomada",
+      "Ausgesteckt": "Desconectado da tomada",
+      "Strom erkannt": "Corrente detectada",
+      "Kein Strom": "Sem corrente",
+      "Läuft": "Em funcionamento",
+      "Geräusch erkannt": "Som detectado",
+      "Kein Geräusch": "Sem som",
+      "Manipulation erkannt": "Violação detectada",
+      "Keine Manipulation": "Sem violação",
+      "Update verfügbar": "Atualização disponível",
+      "Aktuell": "Atualizado",
+      "Vibration erkannt": "Vibração detectada",
+      "Keine Vibration": "Sem vibração",
+      "Öffnet": "Abrindo",
+      "Schließt": "Fechando",
+      "Verriegelt …": "Trancando…",
+      "Entriegelt …": "Destrancando…",
+      "Blockiert": "Emperrado",
+      "Zuhause": "Casa",
+      "Wiedergabe": "Reproduzindo",
+      "Pausiert": "Pausado",
+      "Bereit": "Pronto",
+      "Bereitschaft": "Em espera",
+      "Reinigt": "Limpando",
+      "In Station": "Na base",
+      "Kehrt zurück": "Retornando",
+      "Deaktiviert": "Desarmado",
+      "Zuhause gesichert": "Armado em casa",
+      "Abwesend gesichert": "Armado fora de casa",
+      "Alarm": "Alarme",
+      "Heizen": "Aquecimento",
+      "Kühlen": "Resfriamento",
+      "Automatisch": "Automático",
+      "Entfeuchten": "Desumidificação",
+      "Lüften": "Somente ventilação",
+      "Über Horizont": "Acima do horizonte",
+      "Unter Horizont": "Abaixo do horizonte",
+      "Kamerabild nicht verfügbar": "Imagem da câmera indisponível",
+      "Bereich leer oder Leuchten nicht verfügbar": "Área vazia ou luzes indisponíveis",
+      "Geschütztes Attribut": "Atributo protegido",
+      "Entität nicht gefunden": "Entidade não encontrada",
+      "Automation nicht aktiv oder Wert veraltet": "Automação inativa ou valor desatualizado",
+      "Strukturierte Daten benötigen eine eigene Karte": "Dados estruturados precisam de um cartão específico"
+    }
+  };
+  function uiLanguage(){const requested=String(payload.uiLocale||options.uiLocale||'de').replace('_','-'),base=requested.split('-')[0].toLowerCase();return base==='pt'?'pt-BR':Object.hasOwn(uiTranslations,base)?base:'de';}
+  function uiLocale(){return {de:'de-DE',en:'en-US',es:'es-ES',fr:'fr-FR',it:'it-IT','pt-BR':'pt-BR'}[uiLanguage()];}
+  function tr(key,args={}){const table=uiTranslations[uiLanguage()],translated=Object.hasOwn(table,key)?table[key]:key;return translated.replace(/\{(\w+)\}/g,(token,name)=>Object.hasOwn(args,name)?String(args[name]):token);}
   const columns={desktop:12,tablet:8,mobile:4};
   const defaultTitles={weather:'Wetter',climate:'Raumklima',scene:'Szene',text:'Text',camera:'Kamera',image:'Bild',graph:'Livegraph',value:'Wertanzeige',line:'Linie / Trenner',group:'Gruppe',spacer:'Abstand',light:'Licht',switch:'Schalter'};
   const icons={light:'M9 18h6M10 21h4M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 2H9s0-1-1-2',switch:'M12 3v9M7 5a8 8 0 1 0 10 0',camera:'M3 5h12v14H3zM15 10l6-4v12l-6-4',graph:'M3 3v18h18M5 16l4-5 4 2 7-9',value:'M4 9h16M3 15h16M10 3 8 21M17 3l-2 18',text:'M4 5h16M12 5v15M8 20h8',image:'M3 3h18v18H3zM3 17l6-6 4 4 3-3 5 5'};
@@ -87,29 +800,29 @@
       holder.dataset.animation='none';
       if(changed&&!reduceMotion.matches&&!document.hidden&&!n.card.classList.contains('motion-paused')){holder.getAnimations().forEach(a=>a.cancel());holder.animate([{opacity:.4,transform:'scale(.9)'},{opacity:1,transform:'scale(1)'}],{duration:600,easing:'ease-out'});}
     }
-    holder.setAttribute('aria-label',known?'Zustandssymbol: '+name:'Zustand unbekannt');
+    holder.setAttribute('aria-label',known?tr('Zustandssymbol: {name}',{name}):tr('Zustand unbekannt'));
   }
   function displayState(c,v){
-    if(typeof v.value==='boolean')return v.value?'Ein':'Aus';
+    if(typeof v.value==='boolean')return tr(v.value?'Ein':'Aus');
     const state=String(v.value),domain=(c.binding.entityID||'').split('.')[0],dc=v.deviceClass;
     if(domain==='binary_sensor'&&['on','off'].includes(state)){
-      const pair={door:['Offen','Geschlossen'],window:['Offen','Geschlossen'],garage_door:['Offen','Geschlossen'],opening:['Offen','Geschlossen'],lock:['Entriegelt','Verriegelt'],motion:['Bewegung','Keine Bewegung'],occupancy:['Belegt','Frei'],presence:['Anwesend','Abwesend'],moisture:['Nass','Trocken'],smoke:['Rauch erkannt','Kein Rauch'],gas:['Gas erkannt','Kein Gas'],carbon_monoxide:['CO erkannt','Kein CO'],battery:['Batterie niedrig','Batterie normal'],battery_charging:['Lädt','Lädt nicht'],connectivity:['Verbunden','Getrennt'],problem:['Problem','In Ordnung'],safety:['Unsicher','Sicher'],cold:['Kalt','Normal'],heat:['Heiß','Normal'],glass_break:['Glasbruch erkannt','Kein Glasbruch'],light:['Licht erkannt','Kein Licht'],moving:['Bewegt sich','Ruht'],plug:['Eingesteckt','Ausgesteckt'],power:['Strom erkannt','Kein Strom'],running:['Läuft','Ruht'],sound:['Geräusch erkannt','Kein Geräusch'],tamper:['Manipulation erkannt','Keine Manipulation'],update:['Update verfügbar','Aktuell'],vibration:['Vibration erkannt','Keine Vibration']}[dc]||['Ein','Aus'];return pair[state==='on'?0:1];
+      const pair={door:['Offen','Geschlossen'],window:['Offen','Geschlossen'],garage_door:['Offen','Geschlossen'],opening:['Offen','Geschlossen'],lock:['Entriegelt','Verriegelt'],motion:['Bewegung','Keine Bewegung'],occupancy:['Belegt','Frei'],presence:['Anwesend','Abwesend'],moisture:['Nass','Trocken'],smoke:['Rauch erkannt','Kein Rauch'],gas:['Gas erkannt','Kein Gas'],carbon_monoxide:['CO erkannt','Kein CO'],battery:['Batterie niedrig','Batterie normal'],battery_charging:['Lädt','Lädt nicht'],connectivity:['Verbunden','Getrennt'],problem:['Problem','In Ordnung'],safety:['Unsicher','Sicher'],cold:['Kalt','Normal'],heat:['Heiß','Normal'],glass_break:['Glasbruch erkannt','Kein Glasbruch'],light:['Licht erkannt','Kein Licht'],moving:['Bewegt sich','Ruht'],plug:['Eingesteckt','Ausgesteckt'],power:['Strom erkannt','Kein Strom'],running:['Läuft','Ruht'],sound:['Geräusch erkannt','Kein Geräusch'],tamper:['Manipulation erkannt','Keine Manipulation'],update:['Update verfügbar','Aktuell'],vibration:['Vibration erkannt','Keine Vibration']}[dc]||['Ein','Aus'];return tr(Array.isArray(pair)?pair[state==='on'?0:1]:(state==='on'?'Ein':'Aus'));
     }
-    return ({on:'Ein',off:'Aus',open:'Offen',closed:'Geschlossen',opening:'Öffnet',closing:'Schließt',locked:'Verriegelt',unlocked:'Entriegelt',locking:'Verriegelt …',unlocking:'Entriegelt …',jammed:'Blockiert',home:'Zuhause',not_home:'Abwesend',playing:'Wiedergabe',paused:'Pausiert',idle:'Bereit',standby:'Bereitschaft',cleaning:'Reinigt',docked:'In Station',returning:'Kehrt zurück',disarmed:'Deaktiviert',armed_home:'Zuhause gesichert',armed_away:'Abwesend gesichert',triggered:'Alarm',heat:'Heizen',cool:'Kühlen',auto:'Automatisch',dry:'Entfeuchten',fan_only:'Lüften',above_horizon:'Über Horizont',below_horizon:'Unter Horizont'})[state]||state;
+    const label=({on:'Ein',off:'Aus',open:'Offen',closed:'Geschlossen',opening:'Öffnet',closing:'Schließt',locked:'Verriegelt',unlocked:'Entriegelt',locking:'Verriegelt …',unlocking:'Entriegelt …',jammed:'Blockiert',home:'Zuhause',not_home:'Abwesend',playing:'Wiedergabe',paused:'Pausiert',idle:'Bereit',standby:'Bereitschaft',cleaning:'Reinigt',docked:'In Station',returning:'Kehrt zurück',disarmed:'Deaktiviert',armed_home:'Zuhause gesichert',armed_away:'Abwesend gesichert',triggered:'Alarm',heat:'Heizen',cool:'Kühlen',auto:'Automatisch',dry:'Entfeuchten',fan_only:'Lüften',above_horizon:'Über Horizont',below_horizon:'Unter Horizont'})[state];return typeof label==='string'?tr(label):state;
   }
 
   function theme(){const t=documentModel.theme;document.documentElement.style.setProperty('--accent',t.accent);document.documentElement.dataset.palette=t.palette||"slate";root.style.setProperty('--accent',t.accent);root.style.setProperty('--radius',t.radius+'px');root.style.setProperty('--gap',t.spacing+'px');document.documentElement.style.setProperty('--size',t.fontSize+'px');document.documentElement.style.colorScheme=t.appearance==='system'?'light dark':t.appearance;root.style.fontFamily=t.font==='rounded'?'ui-rounded,-apple-system,sans-serif':t.font==='serif'?'ui-serif,Georgia,serif':'-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';}
   function render(){
-    if(!documentModel)return;const menu=document.getElementById('navigation-toggle');if(menu)menu.remove();stopCameras();visibility.disconnect();theme();root.replaceChildren();nodes.clear();root.classList.toggle('dash-edit',options.mode==='editor'&&!payload.preview);
+    if(!documentModel)return;document.documentElement.lang=uiLanguage();const menu=document.getElementById('navigation-toggle');if(menu)menu.remove();stopCameras();visibility.disconnect();theme();root.replaceChildren();nodes.clear();root.classList.toggle('dash-edit',options.mode==='editor'&&!payload.preview);
     const head=el('header','dash-heading'),titles=el('div','dash-titles');titles.append(el('h1','',documentModel.title));if(documentModel.subtitle)titles.append(el('p','dash-subtitle',documentModel.subtitle));head.append(titles);if(documentModel.showClock){const clock=el('div','dash-clock');clock.append(el('small','clock-date'),el('div','clock-time'));head.append(clock);}if(menu)head.append(menu);root.append(head);
     const sideNav=options.mode==='viewer'?document.getElementById('dashboard-page-nav'):null;
-    const nav=sideNav||el('nav','dash-pages');nav.replaceChildren();nav.setAttribute('aria-label','Dashboard-Seiten');
-    if(sideNav){sideNav.hidden=false;sideNav.append(el('span','nav-section-title','Seiten'));}
+    const nav=sideNav||el('nav','dash-pages');nav.replaceChildren();nav.setAttribute('aria-label',tr('Dashboard-Seiten'));
+    if(sideNav){sideNav.hidden=false;sideNav.append(el('span','nav-section-title',tr('Seiten')));}
     const page=documentModel.pages.find(p=>p.id===pageID)||documentModel.pages[0];pageID=page.id;
     const brandHeader=document.querySelector('.viewer-header');if(brandHeader){brandHeader.hidden=page.showLogo===false;document.body.classList.toggle('page-logo-hidden',page.showLogo===false);}
     for(const p of documentModel.pages){const b=el('button','',p.title);b.setAttribute('aria-pressed',String(p.id===pageID));if(p.id===pageID)b.setAttribute('aria-current','page');b.onclick=()=>{pageID=p.id;bridge({type:'page',id:p.id});render();};nav.append(b);}if(!sideNav)root.append(nav);
     const grid=el('div','dash-grid');grid.style.setProperty('--columns',columns[viewport()]);root.append(grid);
-    if(!page.components.length)grid.append(el('div','dash-empty',options.mode==='editor'?'Füge links deine erste Komponente hinzu.':'Diese Seite enthält noch keine Inhalte.'));
+    if(!page.components.length)grid.append(el('div','dash-empty',options.mode==='editor'?tr('Füge links deine erste Komponente hinzu.'):tr('Diese Seite enthält noch keine Inhalte.')));
     for(const c of page.components){
       const card=el('section','dash-widget');card.dataset.kind=c.kind;card.dataset.cardStyle=cardStyle(c);card.dataset.effect=c.effect||'none';card.dataset.id=c.id;card.setAttribute('aria-label',c.title);setFrame(card,frame(c));card.classList.toggle('selected',selected===c.id&&!payload.preview&&options.mode==='editor');
       // Component types belong in the editor library, not in the finished design.
@@ -122,30 +835,30 @@
       else if(c.kind==='line'){const line=el('div','decoration-line');line.dataset.direction=c.lineDirection||'horizontal';card.append(line);}
       else if(c.kind==='group'||c.kind==='spacer'){}
       else if(c.kind==='text')card.append(el('div','widget-text',c.text));
-      else if(c.kind==='image'){const a=documentModel.assets.find(a=>a.id===c.assetID);if(a){const img=el('img','widget-image');img.alt=c.title;img.src=`data:${a.mime};base64,${a.data}`;card.append(img);}else card.append(el('div','widget-text','Bild auswählen'));}
-      else if(c.kind==='camera'){const img=el('img','widget-image widget-camera');img.alt=c.title;card.append(img);card.append(value);if(options.mode==='viewer'){const pause=el('button','camera-pause','Livebild pausieren');pause.onclick=()=>{pausedCameras.has(c.id)?pausedCameras.delete(c.id):pausedCameras.add(c.id);cameraTick();};card.append(pause);}}
-      else if(c.kind==='graph'){card.append(value);const chart=document.createElementNS('http://www.w3.org/2000/svg','svg');chart.classList.add('widget-chart');chart.setAttribute('viewBox','0 0 320 100');chart.setAttribute('preserveAspectRatio','none');chart.setAttribute('role','img');chart.setAttribute('aria-label',c.title+' · Liveverlauf');const path=document.createElementNS(chart.namespaceURI,'path');path.classList.add('chart-line');chart.append(path);card.append(chart,el('small','chart-caption','Liveverlauf seit dem Öffnen'));}
+      else if(c.kind==='image'){const a=documentModel.assets.find(a=>a.id===c.assetID);if(a){const img=el('img','widget-image');img.alt=c.title;img.src=`data:${a.mime};base64,${a.data}`;card.append(img);}else card.append(el('div','widget-text',tr('Bild auswählen')));}
+      else if(c.kind==='camera'){const img=el('img','widget-image widget-camera');img.alt=c.title;card.append(img);card.append(value);if(options.mode==='viewer'){const pause=el('button','camera-pause',tr('Livebild pausieren'));pause.onclick=()=>{pausedCameras.has(c.id)?pausedCameras.delete(c.id):pausedCameras.add(c.id);cameraTick();};card.append(pause);}}
+      else if(c.kind==='graph'){card.append(value);const chart=document.createElementNS('http://www.w3.org/2000/svg','svg');chart.classList.add('widget-chart');chart.setAttribute('viewBox','0 0 320 100');chart.setAttribute('preserveAspectRatio','none');chart.setAttribute('role','img');chart.setAttribute('aria-label',c.title+' · '+tr('Liveverlauf'));const path=document.createElementNS(chart.namespaceURI,'path');path.classList.add('chart-line');chart.append(path);card.append(chart,el('small','chart-caption',tr('Liveverlauf seit dem Öffnen')));}
       else card.append(value);
       const controls=[];
-      if(c.kind==='scene'){const b=el('button','scene-activate','Aktivieren');b.onclick=()=>act(c,{on:true});controls.push(b);card.append(b,feedback);}
+      if(c.kind==='scene'){const b=el('button','scene-activate',tr('Aktivieren'));b.onclick=()=>act(c,{on:true});controls.push(b);card.append(b,feedback);}
       if(c.kind==='climate'){
-        const row=el('div','climate-controls'),temperature=el('input','climate-target');temperature.type='number';temperature.setAttribute('aria-label',c.title+' · Zieltemperatur');temperature.onchange=()=>{if(temperature.value!==''&&temperature.checkValidity())act(c,{temperature:Number(temperature.value)});};
-        row.append(el('span','','Zieltemperatur'),temperature);card.append(row,feedback);controls.push(temperature);
+        const row=el('div','climate-controls'),temperature=el('input','climate-target');temperature.type='number';temperature.setAttribute('aria-label',c.title+' · '+tr('Zieltemperatur'));temperature.onchange=()=>{if(temperature.value!==''&&temperature.checkValidity())act(c,{temperature:Number(temperature.value)});};
+        row.append(el('span','',tr('Zieltemperatur')),temperature);card.append(row,feedback);controls.push(temperature);
       }
       if(c.kind==='light'||c.kind==='switch'){
-        const actions=el('div','widget-actions');for(const on of [true,false]){const b=el('button','',on?'Ein':'Aus');b.dataset.on=String(on);b.onclick=()=>act(c,{on});controls.push(b);actions.append(b);}card.append(actions);
-        if(c.kind==='light'&&!c.brightnessBinding){const slider=el('input','widget-slider');slider.type='range';slider.min='1';slider.max='100';slider.value='50';slider.setAttribute('aria-label',c.title+' · Helligkeit');slider.onchange=()=>act(c,{on:true,brightness:Number(slider.value)});const sliderPart=el('div','widget-slider-part');sliderPart.append(slider);card.append(sliderPart);controls.push(slider);}
+        const actions=el('div','widget-actions');for(const on of [true,false]){const b=el('button','',tr(on?'Ein':'Aus'));b.dataset.on=String(on);b.onclick=()=>act(c,{on});controls.push(b);actions.append(b);}card.append(actions);
+        if(c.kind==='light'&&!c.brightnessBinding){const slider=el('input','widget-slider');slider.type='range';slider.min='1';slider.max='100';slider.value='50';slider.setAttribute('aria-label',c.title+' · '+tr('Helligkeit'));slider.onchange=()=>act(c,{on:true,brightness:Number(slider.value)});const sliderPart=el('div','widget-slider-part');sliderPart.append(slider);card.append(sliderPart);controls.push(slider);}
         card.append(feedback);
       }
       decorateCard(card,c);
       if(options.mode==='editor'&&!payload.preview){
-        for(const direction of ['nw','n','ne','e','se','s','sw','w']){const resize=el('button','dash-resize handle-'+direction);resize.dataset.direction=direction;resize.setAttribute('aria-label',c.title+' · Größe ändern '+direction);card.append(resize);}
+        for(const direction of ['nw','n','ne','e','se','s','sw','w']){const resize=el('button','dash-resize handle-'+direction);resize.dataset.direction=direction;resize.setAttribute('aria-label',c.title+' · '+tr('Größe ändern')+' '+direction);card.append(resize);}
         const label=el('span','selection-label',c.title);card.append(label);
         card.onpointerdown=e=>{if(payload.editContents&&e.target.closest('[data-part]'))return;drag(e,c,card,e.target.dataset?.direction||'');};card.onclick=()=>{selected=c.id;bridge({type:'select',id:c.id});markSelection();};
       }
       nodes.set(c.id,{card,value,feedback,controls,c,camera:card.querySelector('.widget-camera'),cameraAt:0,cameraError:false,graph:card.querySelector('.chart-line')});grid.append(card);visibility.observe(card);
     }
-    root.append(el('div','dash-status',options.mode==='editor'?'Gestaltungsvorschau · Werte nur lesend':'Verbindung wird geprüft …'));applyValues();
+    root.append(el('div','dash-status',options.mode==='editor'?tr('Gestaltungsvorschau · Werte nur lesend'):tr('Verbindung wird geprüft …')));applyValues();
   }
   const partSelectors={title:'.widget-top',value:'.widget-value',condition:'.weather-condition',details:'.weather-details',text:'.widget-text',media:'.widget-image',chart:'.widget-chart',caption:'.chart-caption',buttons:'.widget-actions',slider:'.widget-slider-part',controls:'.climate-controls,.scene-activate,.camera-pause',symbol:'.state-symbol'};
   function decorateCard(card,c){
@@ -161,7 +874,7 @@
       const part=card.querySelector(selector);if(!part)continue;part.dataset.part=key;
       const settings=c.interiors?.[viewport()]?.[key];
       if(settings){part.classList.toggle('part-hidden',settings.hidden);part.style.textAlign=settings.alignment;part.style.justifyContent={start:'flex-start',center:'center',end:'flex-end'}[settings.alignment];if(settings.fontSize)part.style.fontSize=settings.fontSize+'px';if(!settings.automatic)positionPart(part,settings);}
-      if(options.mode==='editor'&&!payload.preview&&payload.editContents){part.classList.add('part-editable');part.title='Inhalt verschieben';part.onpointerdown=e=>dragPart(e,c,card,part,key);}
+      if(options.mode==='editor'&&!payload.preview&&payload.editContents){part.classList.add('part-editable');part.title=tr('Inhalt verschieben');part.onpointerdown=e=>dragPart(e,c,card,part,key);}
     }
   }
   function positionPart(part,f){part.classList.add('part-positioned');Object.assign(part.style,{left:f.x+'%',top:f.y+'%',width:f.width+'%',height:f.height+'%'});}
@@ -200,22 +913,22 @@
     const cancel=event=>{current=original;setFrame(card,original);for(const {n,f} of members)setFrame(n.card,f);finish(event);};card.addEventListener('pointermove',move);card.addEventListener('pointerup',finish);card.addEventListener('pointercancel',cancel);
   }
   function applyValues(){
-    const now=new Date(),clock=root.querySelector('.dash-clock');if(clock){clock.querySelector('.clock-date').textContent=now.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short',year:'numeric'});clock.querySelector('.clock-time').textContent=now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});}
+    const now=new Date(),clock=root.querySelector('.dash-clock');if(clock){clock.querySelector('.clock-date').textContent=now.toLocaleDateString(uiLocale(),{weekday:'short',day:'numeric',month:'short',year:'numeric'});clock.querySelector('.clock-time').textContent=now.toLocaleTimeString(uiLocale(),{hour:'2-digit',minute:'2-digit'});}
     for(const [id,n] of nodes){
       if(['group','line','spacer'].includes(n.c.kind))continue;
-      const v=values[id],known=v?.known===true;let text=known?String(v.value):v?.reason||'Wert nicht verfügbar';
-      if(known&&typeof v.value==='boolean')text=v.value?'Ein':'Aus';
-      if(known&&['light','switch'].includes(n.c.kind)&&['on','off'].includes(v.value))text=v.value==='on'?'Ein':'Aus';
-      if(known&&typeof v.value==='number')text=new Intl.NumberFormat('de-DE',{maximumFractionDigits:2}).format(v.value);
-      if(known&&['value','graph'].includes(n.c.kind)&&typeof v.value==='string'&&v.value.trim()!==''&&Number.isFinite(Number(v.value)))text=new Intl.NumberFormat('de-DE',{maximumFractionDigits:2}).format(Number(v.value));
+      const v=values[id],known=v?.known===true;let text=known?String(v.value):(v?.reason?tr(v.reason):tr('Wert nicht verfügbar'));
+      if(known&&typeof v.value==='boolean')text=tr(v.value?'Ein':'Aus');
+      if(known&&['light','switch'].includes(n.c.kind)&&['on','off'].includes(v.value))text=tr(v.value==='on'?'Ein':'Aus');
+      if(known&&typeof v.value==='number')text=new Intl.NumberFormat(uiLocale(),{maximumFractionDigits:2}).format(v.value);
+      if(known&&['value','graph'].includes(n.c.kind)&&typeof v.value==='string'&&v.value.trim()!==''&&Number.isFinite(Number(v.value)))text=new Intl.NumberFormat(uiLocale(),{maximumFractionDigits:2}).format(Number(v.value));
       if(known&&['value','graph'].includes(n.c.kind)&&numeric(v.value)===null)text=displayState(n.c,v);
       const unit=n.c.unit||v?.unit||'';if(known&&unit&&n.c.showUnit!==false)text+=' '+unit;
       n.card.classList.toggle('is-numeric',known&&numeric(v.value)!==null);
       updateVisual(n,v);
-      if(known&&n.c.kind==='climate')text=Number.isFinite(v.temperature)?new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(v.temperature)+(n.c.showUnit===false?'':'°'):String(v.value);
-      if(known&&n.c.kind==='scene')text='Bereit';
-      if(n.c.kind==='camera'){text=known?(options.mode==='editor'?'Vorschau · Einzelbilder':n.cameraReady?(n.c.cameraMode==='snapshots'?'Livebilder · alle 2 Sekunden':'Live · MJPEG'):'Livebild wird geladen …'):(v?.reason||'Kamera nicht verfügbar');if(n.camera&&options.mode==='editor'){if(v?.image){if(n.camera.src!==v.image)n.camera.src=v.image;}else n.camera.removeAttribute('src');}}
-      if(n.cameraError&&n.c.kind==='camera')text='Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen';
+      if(known&&n.c.kind==='climate')text=Number.isFinite(v.temperature)?new Intl.NumberFormat(uiLocale(),{maximumFractionDigits:1}).format(v.temperature)+(n.c.showUnit===false?'':'°'):String(v.value);
+      if(known&&n.c.kind==='scene')text=tr('Bereit');
+      if(n.c.kind==='camera'){text=known?(options.mode==='editor'?tr('Vorschau · Einzelbilder'):n.cameraReady?(n.c.cameraMode==='snapshots'?tr('Livebilder · alle 2 Sekunden'):tr('Live · MJPEG')):tr('Livebild wird geladen …')):(v?.reason?tr(v.reason):tr('Kamera nicht verfügbar'));if(n.camera&&options.mode==='editor'){if(v?.image){if(n.camera.src!==v.image)n.camera.src=v.image;}else n.camera.removeAttribute('src');}}
+      if(n.cameraError&&n.c.kind==='camera')text=tr('Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen');
       if(n.c.kind==='weather'){weather(n,v);continue;}
       if(n.value.textContent!==text)n.value.textContent=text;
 
@@ -228,16 +941,16 @@
   }
   function weather(n,v){
     const labels={'clear-night':'Klare Nacht',cloudy:'Bewölkt',exceptional:'Außergewöhnliches Wetter',fog:'Nebel',hail:'Hagel',lightning:'Gewitter','lightning-rainy':'Gewitter mit Regen',partlycloudy:'Teilweise bewölkt',pouring:'Starkregen',rainy:'Regen',snowy:'Schnee','snowy-rainy':'Schneeregen',sunny:'Sonnig',windy:'Windig','windy-variant':'Windig und bewölkt'};
-    const known=v?.known===true, o=n.c.weather||{}, format=x=>new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(x);
-    const temperature=known&&Number.isFinite(v.temperature)?format(v.temperature)+(n.c.showUnit===false?'':v.temperature_unit?' '+v.temperature_unit:' · Einheit fehlt'):'—';
+    const known=v?.known===true, o=n.c.weather||{}, format=x=>new Intl.NumberFormat(uiLocale(),{maximumFractionDigits:1}).format(x);
+    const temperature=known&&Number.isFinite(v.temperature)?format(v.temperature)+(n.c.showUnit===false?'':v.temperature_unit?' '+v.temperature_unit:' · '+tr('Einheit fehlt')):'—';
     const condition=n.card.querySelector('.weather-condition'), details=n.card.querySelector('.weather-details');
     n.value.textContent=temperature;
     condition.hidden=o.showCondition===false&&known;
-    condition.textContent=known?(labels[v.value]||String(v.value)):(v?.reason||'Wetter nicht verfügbar');
+    condition.textContent=known?(typeof labels[v.value]==='string'?tr(labels[v.value]):String(v.value)):(v?.reason?tr(v.reason):tr('Wetter nicht verfügbar'));
     const parts=[];
     if(cardStyle(n.c)!=='minimal'){
-      if(o.showHumidity!==false)parts.push('Luftfeuchtigkeit '+(known&&Number.isFinite(v.humidity)?format(v.humidity)+' %':'—'));
-      if(o.showWind!==false)parts.push('Wind '+(known&&Number.isFinite(v.wind_speed)?format(v.wind_speed)+(v.wind_speed_unit?' '+v.wind_speed_unit:' · Einheit fehlt'):'—'));
+      if(o.showHumidity!==false)parts.push(tr('Luftfeuchtigkeit')+' '+(known&&Number.isFinite(v.humidity)?format(v.humidity)+' %':'—'));
+      if(o.showWind!==false)parts.push(tr('Wind')+' '+(known&&Number.isFinite(v.wind_speed)?format(v.wind_speed)+(v.wind_speed_unit?' '+v.wind_speed_unit:' · '+tr('Einheit fehlt')):'—'));
     }
     details.textContent=parts.join(' · ');details.hidden=!parts.length;
   }
@@ -247,15 +960,15 @@
     if(!history||history.binding!==binding){history={binding,points:[],last:0};histories.set(key,history);}
     const at=v?.observedAt||Date.now()/1000, numeric=v?.known&&(typeof v.value==='number'||typeof v.value==='string')&&String(v.value).trim()!==''?Number(v.value):NaN;
     if(at>history.last+.5){history.points.push({at,value:Number.isFinite(numeric)?numeric:null});if(history.points.length>120)history.points.shift();history.last=at;}
-    const points=history.points,valid=points.filter(p=>p.value!==null);if(!valid.length){n.graph.removeAttribute('d');n.card.querySelector('.chart-caption').textContent='Warte auf Zahlenwerte · unbekannte Werte sind Lücken';return;}
+    const points=history.points,valid=points.filter(p=>p.value!==null);if(!valid.length){n.graph.removeAttribute('d');n.card.querySelector('.chart-caption').textContent=tr('Warte auf Zahlenwerte · unbekannte Werte sind Lücken');return;}
     let min=Math.min(...valid.map(p=>p.value)),max=Math.max(...valid.map(p=>p.value));if(min===max){min-=1;max+=1;}
     const first=points[0].at,last=points.at(-1).at;let d='',pen=false;
     for(const p of points){if(p.value===null){pen=false;continue;}const x=4+(p.at-first)/Math.max(last-first,1)*312,y=96-(p.value-min)/(max-min)*92;d+=(pen?' L':' M')+x.toFixed(2)+' '+y.toFixed(2);pen=true;}
     if(valid.length===1)d+=' l.1 0';
     if(n.graph.getAttribute('d')!==d){n.graph.getAnimations().forEach(a=>a.cancel());n.graph.setAttribute('d',d);if(n.c.animated&&Number.isFinite(numeric)&&n.lastNumber!==undefined&&n.lastNumber!==numeric&&!reduceMotion.matches&&!document.hidden)n.graph.animate([{opacity:.45},{opacity:1}],{duration:200});}
     n.lastNumber=numeric;
-    n.card.querySelector('.chart-caption').textContent=`${valid.length} Messpunkte · ${Math.round(last-first)} s · Min ${Math.min(...valid.map(p=>p.value)).toLocaleString('de-DE',{maximumFractionDigits:1})} / Max ${Math.max(...valid.map(p=>p.value)).toLocaleString('de-DE',{maximumFractionDigits:1})}`;
-    n.graph.parentElement.setAttribute('aria-label',n.c.title+': Minimum '+Math.min(...valid.map(p=>p.value))+', Maximum '+Math.max(...valid.map(p=>p.value)));
+    n.card.querySelector('.chart-caption').textContent=tr('{count} Messpunkte · {seconds} s · Min {min} / Max {max}',{count:valid.length,seconds:Math.round(last-first),min:Math.min(...valid.map(p=>p.value)).toLocaleString(uiLocale(),{maximumFractionDigits:1}),max:Math.max(...valid.map(p=>p.value)).toLocaleString(uiLocale(),{maximumFractionDigits:1})});
+    n.graph.parentElement.setAttribute('aria-label',n.c.title+': '+tr('Minimum {min}, Maximum {max}',{min:Math.min(...valid.map(p=>p.value)).toLocaleString(uiLocale()),max:Math.max(...valid.map(p=>p.value)).toLocaleString(uiLocale())}));
     // Switching between dashboards cannot grow the history indefinitely.
     while(histories.size>200)histories.delete(histories.keys().next().value);
   }
@@ -263,21 +976,21 @@
   function cameraTick(){
     if(options.mode!=='viewer')return;let active=0;
     for(const [id,n] of nodes){if(!n.camera)continue;const rect=n.card.getBoundingClientRect(),visible=!document.hidden&&rect.bottom>0&&rect.top<innerHeight&&values[id]?.known&&!pausedCameras.has(id)&&active<4;
-      const button=n.card.querySelector('.camera-pause');button.textContent=pausedCameras.has(id)?'Livebild fortsetzen':'Livebild pausieren';
+      const button=n.card.querySelector('.camera-pause');button.textContent=pausedCameras.has(id)?tr('Livebild fortsetzen'):tr('Livebild pausieren');
       if(!visible){n.camera.removeAttribute('src');n.cameraAt=0;continue;}active++;
       if(!n.cameraReady&&n.camera.naturalWidth>0){n.cameraReady=true;n.cameraError=false;n.camera.classList.remove('camera-unavailable');applyValues();}
       const now=Date.now(),interval=n.c.cameraMode==='snapshots'?2000:46000;
       if(now-n.cameraAt<interval)continue;
-      n.cameraAt=now;n.camera.onload=()=>{n.cameraReady=true;n.cameraError=false;n.camera.classList.remove('camera-unavailable');applyValues();};n.camera.onerror=()=>{n.cameraReady=false;n.cameraError=true;n.camera.classList.add('camera-unavailable');n.value.textContent='Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen';n.cameraAt=Date.now()+10000-interval;};
+      n.cameraAt=now;n.camera.onload=()=>{n.cameraReady=true;n.cameraError=false;n.camera.classList.remove('camera-unavailable');applyValues();};n.camera.onerror=()=>{n.cameraReady=false;n.cameraError=true;n.camera.classList.add('camera-unavailable');n.value.textContent=tr('Livebild nicht verfügbar · Kamera oder Einzelbild-Modus prüfen');n.cameraAt=Date.now()+10000-interval;};
       n.camera.src=new URL(`api/published/${published.id}/camera/${id}?revision=${encodeURIComponent(published.revision)}&t=${now}`,location.href).href;
     }
   }
-  async function request(path,body){const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);try{const r=await fetch(new URL(path,location.href),{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json','X-Nodivra-CSRF':options.csrf}:{},body:body?JSON.stringify(body):undefined,cache:'no-store',signal:controller.signal});const d=await r.json();if(!r.ok)throw Error(d.error||'Anfrage nicht bestätigt.');return d;}finally{clearTimeout(timeout);}}
-  async function act(c,command){if(options.mode!=='viewer'||inflight.has(c.id)||!values[c.id]?.known)return;inflight.add(c.id);applyValues();const n=nodes.get(c.id);n.feedback.textContent='Aufruf wird gesendet …';try{const result=await request('api/published/'+published.id+'/actions',{componentID:c.id,revision:published.revision,requestID:crypto.randomUUID(),...command});n.feedback.textContent=result.message;}catch(e){n.feedback.textContent=e.name==='AbortError'?'Antwort ausstehend. Gerätezustand prüfen; nicht automatisch wiederholt.':e.message;}finally{inflight.delete(c.id);applyValues();}}
-  async function refresh(){if(loading||document.hidden||!published)return;loading=true;const epoch=sequence;try{const result=await request('api/published/'+published.id+'/values');if(epoch!==sequence)return;if(result.revision!==published.revision){await loadPublished(published.id);return;}values=result.values;applyValues();root.querySelector('.dash-status').textContent=result.connected?'':'Home Assistant nicht verbunden';}catch(e){values={};applyValues();const status=root.querySelector('.dash-status');if(status)status.textContent='Verbindung unterbrochen · Bedienung pausiert';}finally{loading=false;}}
+  async function request(path,body){const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);try{const r=await fetch(new URL(path,location.href),{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json','X-Nodivra-CSRF':options.csrf}:{},body:body?JSON.stringify(body):undefined,cache:'no-store',signal:controller.signal});const d=await r.json();if(!r.ok)throw Error(d.error||tr('Anfrage nicht bestätigt.'));return d;}finally{clearTimeout(timeout);}}
+  async function act(c,command){if(options.mode!=='viewer'||inflight.has(c.id)||!values[c.id]?.known)return;inflight.add(c.id);applyValues();const n=nodes.get(c.id);n.feedback.textContent=tr('Aufruf wird gesendet …');try{const result=await request('api/published/'+published.id+'/actions',{componentID:c.id,revision:published.revision,requestID:crypto.randomUUID(),...command});n.feedback.textContent=result.message;}catch(e){n.feedback.textContent=e.name==='AbortError'?tr('Antwort ausstehend. Gerätezustand prüfen; nicht automatisch wiederholt.'):e.message;}finally{inflight.delete(c.id);applyValues();}}
+  async function refresh(){if(loading||document.hidden||!published)return;loading=true;const epoch=sequence;try{const result=await request('api/published/'+published.id+'/values');if(epoch!==sequence)return;if(result.revision!==published.revision){await loadPublished(published.id);return;}values=result.values;applyValues();root.querySelector('.dash-status').textContent=result.connected?'':tr('Home Assistant nicht verbunden');}catch(e){values={};applyValues();const status=root.querySelector('.dash-status');if(status)status.textContent=tr('Verbindung unterbrochen · Bedienung pausiert');}finally{loading=false;}}
   async function loadPublished(id){sequence++;published=await request('api/published/'+encodeURIComponent(id));documentModel=published.document;values={};render();}
-  async function viewer(){const id=new URL(location.href).searchParams.get('dashboard');try{if(id){await loadPublished(id);await refresh();timer=setInterval(refresh,1000);cameraTimer=setInterval(cameraTick,1000);}else{const list=await request('api/published');root.replaceChildren();root.append(el('h1','','Dashboards'),el('p','dash-catalog-subtitle','Dein Zuhause. So wie du es gestaltet hast.'));const catalog=el('div','dash-catalog');catalog.style.marginTop='24px';for(const d of list.dashboards){const a=el('a','',d.title);a.href='?dashboard='+encodeURIComponent(d.id);a.append(el('small','',d.pages+' Seiten'));catalog.append(a);}root.append(catalog);if(!list.dashboards.length)root.append(el('p','dash-status','Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.'));}}catch(e){root.replaceChildren(el('p','dash-status',e.message));}}
-  window.Nodivra={boot(o){options=o;if(o.mode==='viewer')viewer();else bridge({type:'ready'});},update(p){const modelChanged=!!p.document&&JSON.stringify(p.document)!==signature;if(p.document)signature=JSON.stringify(p.document);const layoutChanged=p.pageID!==payload.pageID||p.viewport!==payload.viewport||p.preview!==payload.preview||p.editContents!==payload.editContents;payload={...payload,...p};selected=payload.selection||'';values=payload.values||{};pageID=payload.pageID||pageID;documentModel=payload.document;if(modelChanged||layoutChanged){render();}else{markSelection();applyValues();}}};
+  async function viewer(){const id=new URL(location.href).searchParams.get('dashboard');try{if(id){await loadPublished(id);await refresh();timer=setInterval(refresh,1000);cameraTimer=setInterval(cameraTick,1000);}else{const list=await request('api/published');root.replaceChildren();root.append(el('h1','',tr('Dashboards')),el('p','dash-catalog-subtitle',tr('Dein Zuhause. So wie du es gestaltet hast.')));const catalog=el('div','dash-catalog');catalog.style.marginTop='24px';for(const d of list.dashboards){const a=el('a','',d.title);a.href='?dashboard='+encodeURIComponent(d.id);a.append(el('small','',tr('{count} Seiten',{count:d.pages})));catalog.append(a);}root.append(catalog);if(!list.dashboards.length)root.append(el('p','dash-status',tr('Noch kein Dashboard veröffentlicht. Gestalte dein erstes Dashboard in der Nodivra Mac-App.')));}}catch(e){root.replaceChildren(el('p','dash-status',e.message));}}
+  window.Nodivra={boot(o){options=o;if(o.mode==='viewer')viewer();else bridge({type:'ready'});},update(p){const modelChanged=!!p.document&&JSON.stringify(p.document)!==signature;if(p.document)signature=JSON.stringify(p.document);const localeChanged=p.uiLocale!==undefined&&p.uiLocale!==payload.uiLocale;const layoutChanged=p.pageID!==payload.pageID||p.viewport!==payload.viewport||p.preview!==payload.preview||p.editContents!==payload.editContents;payload={...payload,...p};selected=payload.selection||'';values=payload.values||{};pageID=payload.pageID||pageID;documentModel=payload.document;if(modelChanged||layoutChanged||localeChanged){render();}else{markSelection();applyValues();}}};
   let lastViewport='';new ResizeObserver(()=>{if(options.mode==='viewer'&&documentModel){const v=viewport();if(v!==lastViewport){lastViewport=v;render();}}}).observe(root);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCameras();else{cameraTick();refresh();}});
   window.addEventListener('pagehide',()=>{clearInterval(timer);clearInterval(cameraTimer);stopCameras();sequence++;});

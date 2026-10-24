@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verify shared renderer localization
+        run: node tests/test_dashboard_localization.mjs
       - name: Build the Home Assistant runtime image
         run: docker build -t nodivra-runtime ./nodivra_runtime
       - name: Verify API and real Swift engine without devices

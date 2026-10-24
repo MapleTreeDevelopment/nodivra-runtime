@@ -1,3 +1,10 @@
+# 0.18.1
+
+- Gemeinsames Modul-Logo und ruhigere Navigation im Stil der Mac-App.
+- Kompakte Listen, klarere Typografie und abgestimmte helle/dunkle Oberflächen.
+- Flache Standardkarten im gemeinsamen Dashboard-Renderer. Eigene Kartenstile und Effekte bleiben erhalten.
+- Keine Änderung an Automationen, APIs, Berechtigungen oder gespeicherten Daten.
+
 # 0.18.0
 
 - Direkte Modbus-Anbindung, Netzwerksuche, SunSpec und Geräteprofile entfernt. Vorhandene Home-Assistant-Entitäten dienen als Ein- und Ausgänge.

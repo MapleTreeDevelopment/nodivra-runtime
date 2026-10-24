@@ -1,3 +1,11 @@
+# 0.6.1
+
+- Modul-Logo der Mac-App im Dashboard und beim Verbinden eines Browsers.
+- Ruhigere Navigation, klare Typografie und flache Standardkarten.
+- Browser-Anmeldung unterstützt helles und dunkles Systemdesign.
+- Einklappen, mobiler Drawer, Seiten ohne Logo sowie eigene Designs bleiben erhalten.
+- Keine Änderung an Berechtigungen, Kopplung oder Geräteaktionen.
+
 ## 0.6.0
 
 - Freie Inhaltspositionen, Sichtbarkeit, Ausrichtung und Schriftgröße je Geräteansicht.

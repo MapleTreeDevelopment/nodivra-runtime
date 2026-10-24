@@ -1,8 +1,8 @@
-.tool-layout{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100vh}
-.tool-sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:28px;padding:30px 16px 18px;border-right:1px solid var(--line);background:light-dark(#f0f2f5,#1d2228);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);overflow-y:auto}
-.tool-brand{display:flex;align-items:center;gap:12px;padding:0 10px 8px}.tool-brand strong{display:block;font-size:17px;letter-spacing:-.4px}.tool-brand small{display:block;margin-top:3px;color:var(--muted);font-size:12px}.tool-brand-mark{color:#0786ff}.tool-brand-mark svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.5}
-.tool-sidebar nav{display:grid;gap:6px}.tool-sidebar .tool-link{display:flex;align-items:center;gap:11px;min-height:42px;padding:10px 12px;border-radius:9px;text-decoration:none;color:var(--text);font-weight:500}.tool-link svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.5;flex:none}.tool-sidebar .tool-link:hover{background:light-dark(#e5e9ef,#282f37)}.tool-sidebar .tool-link[aria-current=page]{background:light-dark(#dfeaff,#233a53);color:light-dark(#006bd6,#65adff)}.tool-sidebar .tool-settings{margin-top:auto;padding-top:16px}
-#dashboard-page-nav{padding-top:20px;border-top:1px solid var(--line)}#dashboard-page-nav .nav-section-title{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;padding:0 12px 8px}#dashboard-page-nav button{text-align:left;border:0;background:none;color:var(--muted);padding:9px 12px;border-radius:8px;white-space:normal;overflow-wrap:anywhere;font:inherit;cursor:pointer}#dashboard-page-nav button[aria-current=page]{color:var(--text);background:light-dark(#e5e9ef,#2a3038)}
+.tool-layout{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:100vh}
+.tool-sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:24px;padding:24px 12px 18px;border-right:1px solid var(--line);background:light-dark(#f0f2f5,#1f2328);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);overflow-y:auto}
+.tool-brand{display:flex;align-items:center;gap:12px;padding:0 10px 8px}.tool-brand strong{display:block;font-size:17px;letter-spacing:-.4px}.tool-brand small{display:block;margin-top:3px;color:var(--muted);font-size:12px}.tool-brand-mark{color:#0786ff}.tool-brand-mark svg{width:24px;height:24px;display:block}
+.tool-sidebar nav{display:grid;gap:6px}.tool-sidebar .tool-link{display:flex;align-items:center;gap:11px;min-height:42px;padding:10px 12px;border-radius:6px;text-decoration:none;color:var(--text);font-weight:400}.tool-link svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.5;flex:none}.tool-sidebar .tool-link:hover{background:light-dark(#e5e9ef,#282f37)}.tool-sidebar .tool-link[aria-current=page]{background:light-dark(#fff,#22262b);color:var(--text)}.tool-sidebar .tool-settings{margin-top:auto;padding-top:16px}
+#dashboard-page-nav{padding-top:20px;border-top:1px solid var(--line)}#dashboard-page-nav .nav-section-title{color:var(--muted);font-size:11px;font-weight:400;letter-spacing:0;padding:0 12px 8px}#dashboard-page-nav button{text-align:left;border:0;background:none;color:var(--muted);padding:9px 12px;border-radius:8px;white-space:normal;overflow-wrap:anywhere;font:inherit;cursor:pointer}#dashboard-page-nav button[aria-current=page]{color:var(--text);background:light-dark(#e5e9ef,#2a3038)}
 .tool-layout>main{width:100%;min-width:0;align-self:start}.tool-layout a:focus-visible,.tool-sidebar button:focus-visible{outline:3px solid #2389ff80;outline-offset:2px}
 @media(max-width:760px){.tool-layout{display:block}.tool-sidebar{position:relative;height:auto;gap:14px;padding:16px;border-right:0;border-bottom:1px solid var(--line);overflow:visible;display:grid;grid-template-columns:1fr auto}.tool-brand{grid-column:1/-1;padding:0}.tool-sidebar nav{display:flex;gap:4px;flex-wrap:wrap}.tool-sidebar .tool-settings{margin:0;padding:0}.tool-sidebar .tool-link{padding:9px;min-height:40px}.tool-sidebar #dashboard-page-nav{grid-column:1/-1;padding-top:12px}.nav-section-title{display:none}}
 @media(max-width:760px){.tool-sidebar>nav[aria-label="Nodivra Navigation"]{grid-column:1;grid-row:2}.tool-sidebar .tool-settings{grid-column:2;grid-row:2}.tool-sidebar #dashboard-page-nav{grid-row:3}}
@@ -10,21 +10,21 @@
 
 .tool-sidebar [hidden]{display:none!important}
 
-.tool-brand strong{font-size:19px;font-weight:400;letter-spacing:-.6px}.tool-brand-mark svg{width:20px;height:17px;fill:currentColor;stroke:none}.tool-sidebar .tool-link{font-size:13px;font-weight:400}
+.tool-brand strong{font-size:18px;font-weight:400;letter-spacing:-.4px}.tool-sidebar .tool-link{font-size:13px;font-weight:400}
 
 .browser-tools{grid-column:2;padding:8px 30px 24px;font-size:12px;color:var(--muted)}.browser-tools button{font-size:12px}.browser-tools p{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}@media(max-width:760px){.browser-tools{padding:16px}}
 
 /* Same silhouette, size and spacing as NodivraBrand in the Mac app. */
-.tool-brand{display:grid;grid-template-columns:20px minmax(0,1fr);column-gap:9px;row-gap:3px;align-items:center}
+.tool-brand{display:grid;grid-template-columns:24px minmax(0,1fr);column-gap:9px;row-gap:3px;align-items:center}
 .tool-brand>div{display:contents}.tool-brand-mark{grid-column:1;grid-row:1;display:flex;align-items:center;color:#146eff}
 .tool-brand strong{grid-column:2;grid-row:1;line-height:1.45}
 .tool-brand small{grid-column:2;grid-row:2;margin:0}
 
 /* Dashboard viewer chrome inherits the selected palette. Runtime navigation is independent. */
-.dashboard-viewer{grid-template-columns:220px minmax(0,1fr);grid-template-rows:72px auto;align-content:start}
+.dashboard-viewer{grid-template-columns:190px minmax(0,1fr);grid-template-rows:72px auto;align-content:start}
 .viewer-header{grid-column:1/-1;grid-row:1;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--line);background:var(--bg);min-width:0}
 .viewer-header .tool-brand{padding:0}.viewer-header .tool-brand small{font-size:11px}
-#navigation-toggle{display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:9px;background:transparent;color:var(--text);flex:none}
+#navigation-toggle{display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:6px;background:transparent;color:var(--text);flex:none}
 #navigation-toggle:hover{background:var(--panel)}#navigation-toggle svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .dashboard-viewer>.tool-sidebar{grid-column:1;grid-row:2;top:72px;height:calc(100dvh - 72px);background:var(--bg);padding-top:20px}
 .dashboard-viewer>#dashboard{grid-column:2;grid-row:2;max-width:none;min-width:0}
@@ -45,7 +45,7 @@
 }
 
 .dashboard-viewer .tool-brand small{display:block}
-.viewer-header .tool-brand{align-self:flex-start}
+.viewer-header .tool-brand{align-self:center}
 
 
 /* The navigation control belongs to the page title, independent of branding. */
@@ -56,3 +56,5 @@
 .dashboard-viewer.page-logo-hidden{grid-template-rows:0 auto}
 .dashboard-viewer.page-logo-hidden>.tool-sidebar{top:0;height:100dvh}
 .dashboard-viewer.page-logo-hidden .navigation-backdrop{top:0}
+
+.tool-brand-mark{line-height:0}.tool-link:focus-visible,#navigation-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

@@ -17,9 +17,9 @@
 :root { --bg:light-dark(#f5f6f8,#171d20); --panel:light-dark(#fff,#282e32); --line:light-dark(#e2e6ec,#3b4248); }
 #dashboard { padding:30px; }
 .dash-heading { margin-bottom:24px; }
-.dash-heading h1 { font-size:29px; font-weight:650; letter-spacing:-0.9px; }
+.dash-heading h1 { font-size:23px; font-weight:500; letter-spacing:-0.55px; }
 .dash-heading small { opacity:.8; }
-.dash-widget { background:linear-gradient(135deg,color-mix(in srgb,var(--panel) 92%,white),var(--panel)); box-shadow:0 4px 16px #00000008; gap:10px; }
+.dash-widget { background:var(--panel); box-shadow:none; gap:10px; }
 .widget-top { position:relative; z-index:1; }
 .widget-title { font-weight:550; }
 .widget-backdrop { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; pointer-events:none; }
@@ -59,7 +59,7 @@
 .dash-edit .scene-activate,.dash-edit .climate-controls { pointer-events:none; }
 
 /* Compact typography: hierarchy through spacing, not heavy type. */
-.dash-heading h1 { font-size:25px; font-weight:500; letter-spacing:-0.55px; }
+.dash-heading h1 { font-size:23px; font-weight:500; letter-spacing:-0.55px; }
 .dash-subtitle { font-size:13px; }
 .widget-title { font-size:13px; font-weight:450; }
 .widget-text { font-size:14px; font-weight:400; }

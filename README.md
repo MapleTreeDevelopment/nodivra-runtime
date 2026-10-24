@@ -1,4 +1,15 @@
-# Nodivra Runtime 0.18.0 und Nodivra Dashboards 0.6.0
+# Nodivra Runtime 0.18.1 und Nodivra Dashboards 0.6.1
+
+## Einheitliche Oberfläche
+
+Beide Webdienste verwenden das Modul-Logo der Mac-App sowie eine ruhigere Navigation und klare Typografie in Hell und Dunkel. Standardkarten sind flach; bewusst gewählte Kartenstile, eigene Farben, Hintergrundbilder und Animationen bleiben erhalten. Die Browser-Anmeldung folgt jetzt ebenfalls dem Systemdesign.
+
+Die gemeinsame Dashboard-Darstellung enthält die sechs Sprachkataloge der Mac-Vorschau. Ohne explizite Oberflächensprache bleibt die bestehende deutsche Darstellung erhalten. Eigene Seitentitel, Beschriftungen und Entitätswerte werden nicht übersetzt.
+
+Automationsengine, Datenformat, Zugriffsschutz und Update-/Wiederanlaufregeln sind unverändert. Dashboards bleiben ein eigenständiger Webdienst. Vorhandene Dashboard-Daten müssen nicht neu veröffentlicht werden. Vor einem Update eine vollständige HA-Sicherung erstellen.
+
+[Änderungen und Prüfumfang](docs/UI-0.18.1.md)
+
 
 ## Neu in Runtime 0.18.0
 
@@ -20,7 +31,7 @@ Mac-App 0.30.0 entfernt die Geräteverwaltung und den direkten Modbus-Eingang. N
 
 **Nodivra Dashboards** ist eine zusätzliche Home-Assistant-App mit eigenem Webdienst und Seitenleisteneintrag. Die gemeinsame Runtime speichert weiterhin alle Entwürfe, veröffentlichten Dashboards und Versionen und übernimmt Geräteaktionen. Ein Update des Webdienstes benötigt keinen Neustart der Automationsengine. Dashboards werden ausschließlich über Nodivra Dashboards geöffnet; die Runtime-Oberfläche verwaltet Automationen und Einstellungen.
 
-Nach einer vollständigen HA-Sicherung die Runtime auf 0.18.0 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.6.0** installieren. In der Mac-App **Nodivra 0.23 → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
+Nach einer vollständigen HA-Sicherung die Runtime auf 0.18.1 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.6.1** installieren. In der Mac-App **Nodivra → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
 
 Der zusätzliche Dienst hat standardmäßig keinen freigegebenen LAN-Port, keine eigene Automationsengine und keine Supervisor-Verwaltungsrechte. Zugriff erfolgt über HA Ingress mit einem Administratorkonto; optional ist eine eigene Browser-Seite für gekoppelte Browser verfügbar. Der Browser erhält keine Runtime-Zugangsschlüssel. Vorhandene Dashboard-Daten müssen weder kopiert noch erneut veröffentlicht werden.
 
@@ -149,3 +160,4 @@ Der Anlaufimpuls ist im ersten Zyklus eines neu initialisierten Programms Ein un
 `GET /api/v1/live/{id}` ergänzt optionale `diagnostics` pro Block und `actions` mit dem letzten bestätigten Transportstatus samt Zeitstempel. Die Anzeige verändert weder Eingänge noch Aktionen. Unbekannte und fehlende Signale bleiben unbekannt; unbeschaltete neutrale Eingänge sind gesondert markiert. Timer zeigen die beim Start erfasste Vorgabe, Laufzeit und Resetursache. Bei älteren gespeicherten Laufzuständen können Gesamt- und vergangene Zeit fehlen; sie werden nicht geschätzt.
 
 Nodivra 0.17 verknüpft Protokollmeldungen mit ihren Blöcken. Historische Einträge bleiben als solche gekennzeichnet. `action_sent` meldet den Versand, `action` die HA-Bestätigung, `action_failed` einen Fehler oder unklaren Ausgang und `block_failed` einen Engine-Fehler. Beobachtung und Simulation werden niemals als Gerätebestätigung angezeigt. Ein bestätigter Dienstaufruf beweist keinen physischen Gerätezustand.
+
