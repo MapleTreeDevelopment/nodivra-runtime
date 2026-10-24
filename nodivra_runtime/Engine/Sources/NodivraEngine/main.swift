@@ -20,6 +20,7 @@ while let line = readLine() {
     do {
         let r = try JSONDecoder().decode(Request.self, from: Data(line.utf8))
         switch r.op {
+        case "catalog": emit(RuntimeBlockCatalog.local)
         case "validate":
             guard let package = r.package else { throw CLIError.invalid }
             emit(RuntimeCompiler.validate(package))

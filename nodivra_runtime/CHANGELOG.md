@@ -1,3 +1,10 @@
+# 0.19.0
+
+- Authentifizierter dynamischer Bausteinkatalog für die Mac-App ab 0.35.9. Feste PLC-Funktionen liefern Anschlüsse, Einstellungen und Grenzen als Daten.
+- Neue Bausteine erhalten eine versionierte Beschreibung im gespeicherten Programm. Bestehende Programme, Positionen, Verbindungen und Wiederanlaufregeln bleiben unverändert.
+- Programmprotokoll 6 für Katalogbausteine; ältere Programmfassungen bleiben ausführbar. Unbekannte oder veränderte Definitionen werden vor der Ausführung abgelehnt.
+- Keine heruntergeladenen Skripte. Lokale Simulation nur für lokal unterstützte Definitionen. Keine Änderung am Dashboard-Webdienst 0.6.1.
+
 # 0.18.1
 
 - Gemeinsames Modul-Logo und ruhigere Navigation im Stil der Mac-App.

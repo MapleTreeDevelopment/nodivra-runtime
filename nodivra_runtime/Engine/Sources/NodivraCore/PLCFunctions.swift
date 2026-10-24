@@ -137,6 +137,7 @@ public extension Block {
     var function: PLCFunction? { kind == .function ? PLCFunction(rawValue: text("function")) : nil }
     var isGate: Bool { [.and, .or, .xor].contains(kind) || function.map { [.nand, .nor, .andEdge, .nandEdge].contains($0) } == true }
     var inputCount: Int {
+        if let definition = runtimeDefinition { return min(16, definition.inputs.count) }
         if hasActionParameters { return 1 + actionParameters.count }
         if function == .valueSelect { return valueSelectionCount }
         if isGate { let n = number("inputCount", kind == .function ? 5 : 2); return n.isFinite ? max(2, min(8, Int(n.clamped(to: 2...8)))) : 2 }
@@ -144,12 +145,13 @@ public extension Block {
         if hasTimerReset { return 2 }
         return function?.pins.count ?? kind.inputCount
     }
-    var outputType: SignalType { if function == .valueSelect { return selectionType }; return function.map { $0.analogOutput ? .analog : .digital } ?? kind.outputType }
-    func inputType(_ pin: Int) -> SignalType { if hasActionParameters && pin > 0 && pin <= actionParameters.count { return actionParameters[pin - 1].type }; if variableDuration && pin == 2 { return .analog }; if let f = function { return f.pins.indices.contains(pin) ? f.pins[pin].1 : .digital }; return kind.inputType }
-    var outputCount: Int { isGate || kind == .not ? 5 : function?.hasValueOutput == true ? 2 : kind.hasOutput ? 1 : 0 }
-    func outputType(_ pin: Int) -> SignalType { function?.hasValueOutput == true && pin == 1 ? .analog : outputType }
-    func outputLabel(_ pin: Int) -> String { function?.hasValueOutput == true && pin == 1 ? "AQ · Zahlenwert" : isGate || kind == .not ? "Q · Abgang \(pin + 1)" : outputType == .analog ? "AQ" : "Q" }
+    var outputType: SignalType { if let definition = runtimeDefinition { return definition.outputs.first?.type ?? .digital }; if function == .valueSelect { return selectionType }; return function.map { $0.analogOutput ? .analog : .digital } ?? kind.outputType }
+    func inputType(_ pin: Int) -> SignalType { if let definition = runtimeDefinition { return definition.inputs.indices.contains(pin) ? definition.inputs[pin].type : .digital }; if hasActionParameters && pin > 0 && pin <= actionParameters.count { return actionParameters[pin - 1].type }; if variableDuration && pin == 2 { return .analog }; if let f = function { return f.pins.indices.contains(pin) ? f.pins[pin].1 : .digital }; return kind.inputType }
+    var outputCount: Int { if let definition = runtimeDefinition { return min(8, definition.outputs.count) }; return isGate || kind == .not ? 5 : function?.hasValueOutput == true ? 2 : kind.hasOutput ? 1 : 0 }
+    func outputType(_ pin: Int) -> SignalType { if let definition = runtimeDefinition { return definition.outputs.indices.contains(pin) ? definition.outputs[pin].type : .digital }; return function?.hasValueOutput == true && pin == 1 ? .analog : outputType }
+    func outputLabel(_ pin: Int) -> String { if let definition = runtimeDefinition { return definition.outputs.indices.contains(pin) ? definition.outputs[pin].label : "Q" }; return function?.hasValueOutput == true && pin == 1 ? "AQ · Zahlenwert" : isGate || kind == .not ? "Q · Abgang \(pin + 1)" : outputType == .analog ? "AQ" : "Q" }
     func unusedDigitalInput(_ pin: Int) -> Bool? {
+        if let definition = runtimeDefinition { return definition.inputs.indices.contains(pin) ? definition.inputs[pin].unconnected?.bool : nil }
         if isGate { return kind == .and || function == .nand || function == .andEdge || function == .nandEdge }
         if function == .valueSelect { return false }
         if kind == .latch || hasTimerReset && pin == 1 { return false }

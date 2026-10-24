@@ -697,3 +697,40 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         await self.request('POST','automations/'+r['id']+'/state',dict(enabled=False,expectedRevision=r['revision'],expectedStateVersion=waiting['stateVersion']))
         await self.state('on');await asyncio.sleep(1.2)
         self.assertFalse(self.runtime.record(r['id'])['enabled']);self.assertFalse(self.runtime.recovery_info(r['id'])['pending'])
+
+    async def test_runtime_catalog_is_authenticated_metadata_and_preserves_legacy_status(self):
+        status = await self.request('GET', 'status')
+        self.assertEqual(status['protocolVersion'], 5)
+        self.assertEqual(status['maxProgramProtocol'], 6)
+        self.assertIn('blocks.catalog.v1', status['capabilities'])
+        catalog = await self.request('GET', 'blocks/catalog')
+        self.assertEqual(catalog['schemaVersion'], 1)
+        self.assertGreater(len(catalog['definitions']), 30)
+        self.assertEqual(len({(d['id'], d['version']) for d in catalog['definitions']}), len(catalog['definitions']))
+        async with self.client.get(f'http://127.0.0.1:{self.port}/api/v1/blocks/catalog', headers={'Authorization': 'Bearer invalid'}) as response:
+            self.assertEqual(response.status, 401)
+        self.assertEqual((await self.request('GET', 'automations'))['automations'], [])
+        self.assertEqual(self.calls, [])
+
+    async def test_catalog_block_executes_with_real_engine_and_survives_restart(self):
+        catalog = await self.request('GET', 'blocks/catalog')
+        definition = next(d for d in catalog['definitions'] if d['function'] == 'average')
+        source = block('analogInput', {'initial': 10, 'minimum': 0, 'maximum': 100})
+        dynamic = block('function', {'function': definition['function'], **{f['key']: f['initial'] for f in definition['fields']}})
+        dynamic['options'].update(samples=1, interval=0.1)
+        dynamic.update(catalogID=definition['id'], runtimeDefinition=definition)
+        p = dict(protocolVersion=6, timeZone='UTC', graph=dict(formatVersion=4, id=str(uuid.uuid4()), title='Catalog fixture', blocks=[source, dynamic], wires=[dict(id=str(uuid.uuid4()), source=source['id'], target=dynamic['id'], input=0)]))
+        r = await self.configure(await self.upload(p)); await self.enable(r)
+        await asyncio.sleep(.2)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertEqual(live['analogSignals'][dynamic['id'].upper()], 10)
+        await self.restart(); await self.wait_running(r['id']); await asyncio.sleep(.2)
+        live = await self.request('GET', 'live/' + r['id'])
+        self.assertEqual(live['analogSignals'][dynamic['id'].upper()], 10)
+        self.assertEqual(self.runtime.record(r['id'])['package']['graph']['blocks'][1]['runtimeDefinition'], definition)
+        self.assertEqual(self.calls, [])
+        import copy
+        invalid = copy.deepcopy(p); invalid['graph']['blocks'][1]['runtimeDefinition']['inputs'][0]['type'] = 'digital'
+        self.assertFalse((await self.request('POST', 'validate', invalid))['valid'])
+        old_protocol = copy.deepcopy(p); old_protocol['protocolVersion'] = 5
+        self.assertFalse((await self.request('POST', 'validate', old_protocol))['valid'])

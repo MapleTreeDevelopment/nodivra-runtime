@@ -5,7 +5,7 @@ public struct RuntimePackage: Codable, Equatable, Sendable {
     public var protocolVersion: Int = 1
     public var graph: AutomationGraph
     public var timeZone: String
-    public init(graph: AutomationGraph, timeZone: String = TimeZone.current.identifier) { self.graph = graph; self.timeZone = timeZone; protocolVersion = graph.usesActionParameters ? 5 : graph.usesVariableParameters ? 4 : graph.usesExtendedPLC ? 3 : graph.usesPLCCycle ? 2 : 1 }
+    public init(graph: AutomationGraph, timeZone: String = TimeZone.current.identifier) { self.graph = graph; self.timeZone = timeZone; protocolVersion = graph.blocks.contains(where: { $0.runtimeDefinition != nil }) ? 6 : graph.usesActionParameters ? 5 : graph.usesVariableParameters ? 4 : graph.usesExtendedPLC ? 3 : graph.usesPLCCycle ? 2 : 1 }
 }
 public struct RuntimeIssue: Codable, Identifiable, Equatable, Sendable {
     public var blockID: UUID?
@@ -22,11 +22,12 @@ public struct RuntimeValidation: Codable, Sendable {
 public enum RuntimeCompiler {
     public static let version = "0.10.0"
     public static let catalogIDs: Set<String> = Set(["logic.digitalInput", "logic.analogInput", "logic.digitalOutput", "logic.analogOutput", "logic.marker", "logic.analogMarker", "logic.markerContact", "logic.analogContact", "logic.analogCompare", "logic.state", "logic.stateMatch", "logic.numeric", "logic.constant", "logic.timeWindow", "logic.button", "logic.and", "logic.or", "logic.xor", "logic.not", "logic.onDelay", "logic.offDelay", "logic.pulse", "logic.latch", "logic.output", "logic.darkness", "logic.motion", "logic.autoOff", "trigger.state", "trigger.time", "trigger.pattern", "condition.state", "condition.numeric", "condition.time", "action.service", "action.light", "action.delay", "runtime.log"]).union(PLCFunction.allCases.map { "plc." + $0.rawValue })
-    public static func validate(_ package: RuntimePackage) -> RuntimeValidation {
+    public static func validate(_ package: RuntimePackage, forEditing: Bool = false) -> RuntimeValidation {
         let g = package.graph
         var issues: [RuntimeIssue] = []
         func fail(_ text: String, _ b: Block? = nil) { issues.append(.init(text, blockID: b?.id)) }
-        if ![1, 2, 3, 4, 5].contains(package.protocolVersion) || ![2, 3, 4, 5, 6].contains(g.formatVersion) || (g.usesPLCCycle && package.protocolVersion < 2) || (g.usesExtendedPLC && package.protocolVersion < 3) || (g.usesVariableParameters && package.protocolVersion < 4) || (g.usesActionParameters && package.protocolVersion < 5) { fail("Diese Programmversion wird von der Runtime nicht unterstützt.") }
+        if ![1, 2, 3, 4, 5, 6].contains(package.protocolVersion) || ![2, 3, 4, 5, 6].contains(g.formatVersion) || (g.usesPLCCycle && package.protocolVersion < 2) || (g.usesExtendedPLC && package.protocolVersion < 3) || (g.usesVariableParameters && package.protocolVersion < 4) || (g.usesActionParameters && package.protocolVersion < 5) { fail("Diese Programmversion wird von der Runtime nicht unterstützt.") }
+        if g.blocks.contains(where: { $0.runtimeDefinition != nil }) && package.protocolVersion < 6 { fail("Runtime-Bausteine benötigen Programmprotokoll 6.") }
         if TimeZone(identifier: package.timeZone) == nil { fail("Eine gültige Zeitzone ist erforderlich.") }
         if g.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { fail("Gib der Automation einen Namen.") }
         if g.blocks.isEmpty || g.blocks.count > 150 || g.wires.count > 400 { fail("Ein Programm benötigt 1 bis 150 Bausteine und höchstens 400 Verbindungen.") }
@@ -42,12 +43,16 @@ public enum RuntimeCompiler {
         if ordered(g).count != g.blocks.count { fail("Eine Rückführung benötigt einen Merker. Eine Schleife ohne Zyklusspeicher ist nicht ausführbar.") }
         var inputs = Set<String>(), actions = 0
         for b in g.blocks {
+            if let definition = b.runtimeDefinition {
+                issues += definition.issues(for: b)
+                if !forEditing && !b.runtimeDefinitionAvailableLocally { fail("Diese Bausteinversion ist hier nicht verfügbar. Auf der passenden Runtime prüfen; lokal nicht simulieren.", b) }
+            }
             if b.entityID.hasPrefix("nodivra_modbus.") { fail("Direkte Modbus-Eingänge werden nicht mehr unterstützt. Wähle die zugehörige Home-Assistant-Entität.", b) }
-            if let reset = b.options["resettable"], reset.bool == nil { fail("Rücksetzen benötigt Ein oder Aus.", b) }
+            if b.runtimeDefinition == nil, let reset = b.options["resettable"], reset.bool == nil { fail("Rücksetzen benötigt Ein oder Aus.", b) }
             if b.kind == .latch && !["reset", "set"].contains(b.text("priority", "reset")) { fail("Wähle Setzen oder Rücksetzen als Vorrang.", b) }
             if b.isGate && g.wires.allSatisfy({ $0.target != b.id }) { fail("Verbinde mindestens einen Eingang.", b) }
             if let count = b.options["inputCount"], !b.configurableInputCount || count.number.map({ !$0.isFinite || $0.rounded() != $0 || !(2...8).contains($0) }) != false { fail("Dieser Baustein unterstützt 2 bis 8 Eingänge.", b) }
-            if b.kind == .function {
+            if b.kind == .function && !(forEditing && b.runtimeDefinition != nil && !b.runtimeDefinitionAvailableLocally) {
                 if let f = b.function {
                     for parameter in f.parameters {
                         if f == .valueSelect && b.typedSelection && parameter.key != "valueUnit" { continue }
@@ -80,10 +85,10 @@ public enum RuntimeCompiler {
                     }
                 } else { fail("Wähle eine bekannte Sonderfunktion.", b) }
             }
-            if b.flag("configurationError") { fail("Korrigiere die erweiterte Konfiguration.", b) }
+            if b.runtimeDefinition == nil && b.flag("configurationError") { fail("Korrigiere die erweiterte Konfiguration.", b) }
             let allowedOptions: Set<String>
             switch b.kind {
-            case .function: allowedOptions = Set((b.function?.parameters.map(\.key) ?? []) + ["function", "inputCount"])
+            case .function: allowedOptions = Set((b.runtimeDefinition?.fields.map(\.key) ?? b.function?.parameters.map(\.key) ?? []) + ["function", "inputCount"])
             case .and, .or, .xor: allowedOptions = ["inputCount"]
             case .digitalInput: allowedOptions = ["initial"]
             case .analogInput: allowedOptions = ["initial", "attribute", "minimum", "maximum"]
@@ -105,6 +110,7 @@ public enum RuntimeCompiler {
             default: allowedOptions = []
             }
             if !Set(b.options.keys).isSubset(of: allowedOptions) { fail("Nicht unterstützte Bausteinoptionen: " + Set(b.options.keys).subtracting(allowedOptions).sorted().joined(separator: ", "), b) }
+            if b.runtimeDefinition == nil {
             for key in ["duration", "threshold", "signalDuration"] where b.options[key] != nil {
                 if b.options[key]?.number?.isFinite != true { fail("\(key) benötigt einen endlichen Zahlenwert.", b) }
             }
@@ -113,6 +119,7 @@ public enum RuntimeCompiler {
             }
             for key in ["expected", "comparison", "mode", "after", "before", "behavior", "retrigger", "signalBehavior", "actionBehavior"] where b.options[key] != nil {
                 if b.options[key]?.string == nil { fail("Ungültiger Wert für \(key).", b) }
+            }
             }
             if let enabled = b.configuration.object?["enabled"], enabled.bool == nil { fail("Aktiviert benötigt Ein oder Aus.", b) }
             if b.kind == .state && b.text("behavior", "switch") != "switch" { fail("Wähle für ein Tastersignal den Taster-Baustein.", b) }

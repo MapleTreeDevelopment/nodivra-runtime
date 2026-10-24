@@ -1,4 +1,4 @@
-# Nodivra Runtime 0.18.1 und Nodivra Dashboards 0.6.1
+# Nodivra Runtime 0.19.0 und Nodivra Dashboards 0.6.1
 
 ## Einheitliche Oberfläche
 
@@ -8,7 +8,7 @@ Die gemeinsame Dashboard-Darstellung enthält die sechs Sprachkataloge der Mac-V
 
 Automationsengine, Datenformat, Zugriffsschutz und Update-/Wiederanlaufregeln sind unverändert. Dashboards bleiben ein eigenständiger Webdienst. Vorhandene Dashboard-Daten müssen nicht neu veröffentlicht werden. Vor einem Update eine vollständige HA-Sicherung erstellen.
 
-[Änderungen und Prüfumfang](docs/UI-0.18.1.md)
+[Dynamischer Bausteinkatalog und Kompatibilität](docs/BLOCK-CATALOG.md)
 
 
 ## Neu in Runtime 0.18.0
@@ -31,7 +31,7 @@ Mac-App 0.30.0 entfernt die Geräteverwaltung und den direkten Modbus-Eingang. N
 
 **Nodivra Dashboards** ist eine zusätzliche Home-Assistant-App mit eigenem Webdienst und Seitenleisteneintrag. Die gemeinsame Runtime speichert weiterhin alle Entwürfe, veröffentlichten Dashboards und Versionen und übernimmt Geräteaktionen. Ein Update des Webdienstes benötigt keinen Neustart der Automationsengine. Dashboards werden ausschließlich über Nodivra Dashboards geöffnet; die Runtime-Oberfläche verwaltet Automationen und Einstellungen.
 
-Nach einer vollständigen HA-Sicherung die Runtime auf 0.18.1 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.6.1** installieren. In der Mac-App **Nodivra → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
+Nach einer vollständigen HA-Sicherung die Runtime auf 0.19.0 aktualisieren und aus dieser Repositoryquelle **Nodivra Dashboards 0.6.1** installieren. In der Mac-App **Nodivra → Runtime → Dashboard-Webdienst → Verbinden** werden interner Hostname, Serverkennung und ein begrenzter Verbindungsschlüssel automatisch eingerichtet. Anschließend in Home Assistant auf der Info-Seite von **Nodivra Dashboards** die Option **In Seitenleiste anzeigen** einschalten. Die gemeinsame Runtime besitzt den getrennten Eintrag **Nodivra Automationen**. Vorhandene Wiederanlaufregeln bleiben gültig; pausierte Automationen werden nicht aktiviert.
 
 Der zusätzliche Dienst hat standardmäßig keinen freigegebenen LAN-Port, keine eigene Automationsengine und keine Supervisor-Verwaltungsrechte. Zugriff erfolgt über HA Ingress mit einem Administratorkonto; optional ist eine eigene Browser-Seite für gekoppelte Browser verfügbar. Der Browser erhält keine Runtime-Zugangsschlüssel. Vorhandene Dashboard-Daten müssen weder kopiert noch erneut veröffentlicht werden.
 

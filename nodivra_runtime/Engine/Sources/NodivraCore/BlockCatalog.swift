@@ -8,8 +8,11 @@ public struct BlockDescriptor: Identifiable, Sendable {
     public let summary: String
     public let defaults: ConfigValue
     public let requiredPaths: [String]
+    public var runtimeDefinition: RuntimeBlockDefinition? = nil
     public func makeBlock() -> Block {
-        .init(kind: kind, title: title, options: kind.isFlow ? ["configuration": defaults] : defaults.object ?? [:], catalogID: id)
+        var block = Block(kind: kind, title: title, options: kind.isFlow ? ["configuration": defaults] : defaults.object ?? [:], catalogID: id)
+        block.runtimeDefinition = runtimeDefinition
+        return block
     }
 }
 public enum BlockCatalog {

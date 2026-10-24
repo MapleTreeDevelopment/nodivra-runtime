@@ -60,13 +60,14 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
     public var options: [String: ConfigValue]
     public var catalogID: String?
     /// Editor layout only. Repeated Q ports are aliases of the same runtime signal.
+    public var runtimeDefinition: RuntimeBlockDefinition?
     public var outputPortCount: Int?
     public init(id: UUID = UUID(), kind: BlockKind, title: String, entityID: String = "", x: Double = 0, y: Double = 0,
                 notes: String = "", negated: Bool = false, negatedInputs: [Int] = [], options: [String: ConfigValue] = [:], catalogID: String? = nil) {
         self.id = id; self.kind = kind; self.title = title; self.entityID = entityID; self.x = x; self.y = y
         self.notes = notes; self.negated = negated; self.negatedInputs = negatedInputs; self.options = options; self.catalogID = catalogID
     }
-    enum CodingKeys: String, CodingKey { case id, kind, title, entityID, x, y, notes, negated, negatedInputs, options, catalogID, outputPortCount }
+    enum CodingKeys: String, CodingKey { case id, kind, title, entityID, x, y, notes, negated, negatedInputs, options, catalogID, outputPortCount, runtimeDefinition }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id); kind = try c.decode(BlockKind.self, forKey: .kind)
@@ -77,6 +78,8 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
         negatedInputs = try c.decodeIfPresent([Int].self, forKey: .negatedInputs) ?? []
         options = try c.decodeIfPresent([String: ConfigValue].self, forKey: .options) ?? [:]
         catalogID = try c.decodeIfPresent(String.self, forKey: .catalogID)
+        runtimeDefinition = try c.decodeIfPresent(RuntimeBlockDefinition.self, forKey: .runtimeDefinition)
+        if let definition = runtimeDefinition, !definition.valid { throw DecodingError.dataCorruptedError(forKey: .runtimeDefinition, in: c, debugDescription: "Invalid runtime block definition") }
         outputPortCount = try c.decodeIfPresent(Int.self, forKey: .outputPortCount)
     }
     public func text(_ key: String, _ fallback: String = "") -> String { options[key]?.string ?? fallback }
@@ -86,6 +89,7 @@ public struct Block: Identifiable, Codable, Equatable, Sendable {
     public var managedButton: Bool { kind == .button && entityID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var momentary: Bool { kind == .button && text("behavior", "momentary") == "momentary" }
     public var inputLabels: [String] {
+        if let definition = runtimeDefinition { return definition.inputs.map(\.label) }
         if hasActionParameters { return [SignalBridge.actionBehavior(self) == "follow" ? "Ein / Aus" : "Start"] + actionParameters.map(\.label) }
         if variableDuration { return ["Trg", "R", "T · Sekunden"] }
         if hasTimerReset { return ["Trg", "R"] }

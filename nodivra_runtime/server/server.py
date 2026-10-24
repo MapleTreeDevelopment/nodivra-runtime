@@ -19,7 +19,7 @@ from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dashboards import DashboardService, DashboardError
 
-VERSION = "0.18.1"
+VERSION = "0.19.0"
 from dashboard_access import display_key, display_request
 
 def canonical(value):
@@ -542,6 +542,9 @@ class Runtime:
                 self.action_update(identity, command, "confirmed", "Von Home Assistant bestätigt · Gerätezustand nicht geprüft.")
             await self.engine.call(op="ack", id=identity, commandID=command["id"], success=True)
 
+    async def block_catalog(self, request):
+        return web.json_response(await self.engine.call(op="catalog"), headers={"Cache-Control": "no-store"})
+
     async def validate(self, package):
         result = await self.engine.call(op="validate", package=package)
         return result | {"valid": not result["issues"]}
@@ -579,6 +582,7 @@ class Runtime:
         app.router.add_get("/api/v1/dashboard-connection", self.dashboard_connection)
         app.router.add_get("/health", self.health)
         app.router.add_get("/api/v1/status", self.status)
+        app.router.add_get("/api/v1/blocks/catalog", self.block_catalog)
         app.router.add_get("/api/v1/automations", self.list_programs)
         app.router.add_post("/api/v1/validate", self.check)
         app.router.add_post("/api/v1/update-policy", self.set_update_policy)
@@ -603,7 +607,7 @@ class Runtime:
         return web.json_response({"service": "nodivra-runtime", "version": VERSION}, status=200 if ready else 503)
 
     async def status(self, request):
-        return web.json_response({"version": VERSION, "protocolVersion": 5, "capabilities": ["automations", "dashboards.documents.v1", "dashboards.display.v1", "dashboards.card-styles.v1", "dashboards.visual-rules.v1", "dashboards.composition.v1", "automations.update-resume.v1", "dashboards.page-branding.v1", "dashboards.weather.v1", "dashboards.designer.v2"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
+        return web.json_response({"version": VERSION, "protocolVersion": 5, "maxProgramProtocol": 6, "capabilities": ["blocks.catalog.v1", "automations", "dashboards.documents.v1", "dashboards.display.v1", "dashboards.card-styles.v1", "dashboards.visual-rules.v1", "dashboards.composition.v1", "automations.update-resume.v1", "dashboards.page-branding.v1", "dashboards.weather.v1", "dashboards.designer.v2"], "serverID": self.server_id, "homeAssistantConnected": self.ha.connected, "automations": len(self.records()), "running": len(self.running), "startedAt": self.started, "restartPolicy": "per_program", "engineReady": self.engine.process is not None and self.engine.process.returncode is None})
 
     async def list_programs(self, request):
         return web.json_response({"automations": self.records()})
